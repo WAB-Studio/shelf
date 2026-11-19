@@ -41,7 +41,10 @@ type SerifProps = {
   // (docs/wordbook/DESIGN.md "Tokens"), so a screen never reaches for Radix's
   // own `color="gray"`. `"quietest"` is the second, dimmer muted role the
   // same table names — first needed by `RegistroVaciarConfirmar`'s captions.
-  muted?: boolean | "quietest";
+  // `"secondary"`: the ink's quieter step, for the line that answers a headword beside it.
+  muted?: boolean | "quietest" | "secondary";
+  // The accent, for the one word that names a state.
+  accent?: boolean;
   // English text, so a screen reader switches to an English voice.
   english?: boolean;
 };
@@ -50,6 +53,7 @@ function withSerif(
   serif: boolean | undefined,
   variant: SerifProps["variant"],
   muted: SerifProps["muted"],
+  accent: boolean | undefined,
   className: string | undefined,
 ): string | undefined {
   const classes = [
@@ -66,17 +70,19 @@ function withSerif(
     variant === "lead" ? styles.lead : undefined,
     muted === true ? styles.muted : undefined,
     muted === "quietest" ? styles.mutedQuietest : undefined,
+    muted === "secondary" ? styles.inkSecondary : undefined,
+    accent ? styles.accent : undefined,
     className,
   ].filter(Boolean);
   return classes.length > 0 ? classes.join(" ") : undefined;
 }
 
-export function Text({ serif, variant, muted, english, className, ...props }: TextProps & SerifProps) {
+export function Text({ serif, variant, muted, accent, english, className, ...props }: TextProps & SerifProps) {
   return (
     <ThemesText
       {...props}
       lang={english ? "en" : props.lang}
-      className={withSerif(serif, variant, muted, className)}
+      className={withSerif(serif, variant, muted, accent, className)}
     />
   );
 }

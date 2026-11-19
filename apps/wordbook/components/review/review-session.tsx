@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import NextLink from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
@@ -39,10 +39,12 @@ import {
   Link,
   Live,
   MetaLabel,
+  PageTitle,
   PosLabel,
   Progress,
   Separator,
   Skeleton,
+  TapTarget,
   Text,
 } from "@/components/ui";
 
@@ -111,6 +113,43 @@ function readyState(
     focus,
     missing,
   };
+}
+
+// The session's header: the title, and while a card is on screen the progress, its count and the way
+// out. Every state draws the title, so the screen never moves under the reader.
+function Frame({
+  progress,
+  children,
+}: {
+  progress?: { value: number; label: string };
+  children?: ReactNode;
+}) {
+  const t = useTranslations("review");
+  return (
+    <Flex direction="column" gap="5">
+      <Flex align="center" gap="4">
+        <PageTitle size="compact">{t("title")}</PageTitle>
+        {progress !== undefined && (
+          <>
+            <Box flexGrow="1">
+              <Progress aria-label={t("progressLabel")} value={progress.value} />
+            </Box>
+            <Text size="2" muted>
+              {progress.label}
+            </Text>
+            <Link asChild underline="none" muted>
+              <NextLink href="/registro">
+                <TapTarget align="center" px="1">
+                  <Text size="2">{t("exit")}</Text>
+                </TapTarget>
+              </NextLink>
+            </Link>
+          </>
+        )}
+      </Flex>
+      {children}
+    </Flex>
+  );
 }
 
 // RL-68, RL-78 and RL-91: one entry at a time — the word or phrase, then its answer on demand, then how well it
@@ -307,8 +346,20 @@ export function ReviewSession() {
     }
   }
 
-  if (state.kind === "loading") return <Skeleton height="160px" />;
-  if (state.kind === "failed") return <Text muted>{t("loadFailed")}</Text>;
+  if (state.kind === "loading") {
+    return (
+      <Frame>
+          <Skeleton height="160px" />
+      </Frame>
+    );
+  }
+  if (state.kind === "failed") {
+    return (
+      <Frame>
+          <Text muted>{t("loadFailed")}</Text>
+      </Frame>
+    );
+  }
 
   const { items, saving, answered, revealedAt, clock, total } = state;
   const kind = state.unit;
@@ -324,20 +375,22 @@ export function ReviewSession() {
     };
     const due = rest.queue.items.length;
     return (
-      <Card>
-        <Flex direction="column" gap="3" align="start">
-          <Text size="4">{t("reviewedWord", { word: focus.word })}</Text>
-          {due > 0 && <Text muted>{t("dueAfterWord", { count: due, kind: rest.unit })}</Text>}
-          {due > 0 && (
-            <Button size="3" onClick={() => setState(readyState(rest, Date.now(), null, null))}>
-              {t("reviewToday")}
-            </Button>
-          )}
-          <Link asChild>
-            <NextLink href="/registro">{t("backToRecord")}</NextLink>
-          </Link>
-        </Flex>
-      </Card>
+      <Frame>
+        <Card>
+          <Flex direction="column" gap="3" align="start">
+            <Text size="4">{t("reviewedWord", { word: focus.word })}</Text>
+            {due > 0 && <Text muted>{t("dueAfterWord", { count: due, kind: rest.unit })}</Text>}
+            {due > 0 && (
+              <Button size="3" onClick={() => setState(readyState(rest, Date.now(), null, null))}>
+                {t("reviewToday")}
+              </Button>
+            )}
+            <Link asChild>
+              <NextLink href="/registro">{t("backToRecord")}</NextLink>
+            </Link>
+          </Flex>
+        </Card>
+      </Frame>
     );
   }
 
@@ -345,30 +398,32 @@ export function ReviewSession() {
     // Every entry answered here is scheduled again, so it joins the ones already waiting.
     const later = state.later + answered.length;
     return (
-      <Card>
-        <Flex direction="column" gap="3" align="start">
-          {state.missing !== null && <Text muted>{t("wordMissing", { word: state.missing })}</Text>}
-          <Text size="4">
-            {answered.length === 0 ? t("nothingDue", { kind }) : t("finished", { count: answered.length, kind })}
-          </Text>
-          {later > 0 && <Text muted>{t("later", { count: later, kind })}</Text>}
-          {later > 0 && state.nextDue !== null && (
-            <Text muted>
-              {t("nextDue", {
-                when: dueWhen(state.nextDue, clock),
-                time: format.dateTime(state.nextDue, { hour: "numeric", minute: "2-digit", timeZone }),
-                date: format.dateTime(state.nextDue, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(state.nextDue, clock, timeZone) }),
-              })}
+      <Frame>
+        <Card>
+          <Flex direction="column" gap="3" align="start">
+            {state.missing !== null && <Text muted>{t("wordMissing", { word: state.missing })}</Text>}
+            <Text size="4">
+              {answered.length === 0 ? t("nothingDue", { kind }) : t("finished", { count: answered.length, kind })}
             </Text>
-          )}
-          {state.newWaiting > 0 && <Text muted>{t("newWaiting", { count: state.newWaiting, kind, cap: NEW_PER_DAY })}</Text>}
-          {later === 0 && state.newWaiting === 0 && <Text muted>{t("empty")}</Text>}
-          {/* An empty record has nothing to open: the way forward is to search. */}
-          <Link asChild>
-            {state.recorded ? <NextLink href="/registro">{t("backToRecord")}</NextLink> : <NextLink href="/">{t("searchWord")}</NextLink>}
-          </Link>
-        </Flex>
-      </Card>
+            {later > 0 && <Text muted>{t("later", { count: later, kind })}</Text>}
+            {later > 0 && state.nextDue !== null && (
+              <Text muted>
+                {t("nextDue", {
+                  when: dueWhen(state.nextDue, clock),
+                  time: format.dateTime(state.nextDue, { hour: "numeric", minute: "2-digit", timeZone }),
+                  date: format.dateTime(state.nextDue, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(state.nextDue, clock, timeZone) }),
+                })}
+              </Text>
+            )}
+            {state.newWaiting > 0 && <Text muted>{t("newWaiting", { count: state.newWaiting, kind, cap: NEW_PER_DAY })}</Text>}
+            {later === 0 && state.newWaiting === 0 && <Text muted>{t("empty")}</Text>}
+            {/* An empty record has nothing to open: the way forward is to search. */}
+            <Link asChild>
+              {state.recorded ? <NextLink href="/registro">{t("backToRecord")}</NextLink> : <NextLink href="/">{t("searchWord")}</NextLink>}
+            </Link>
+          </Flex>
+        </Card>
+      </Frame>
     );
   }
 
@@ -376,19 +431,21 @@ export function ReviewSession() {
     const waiting = items.length - state.index;
     const minutes = Math.max(1, Math.ceil((item.card.due - clock) / 60_000));
     return (
-      <Card>
-        <Flex direction="column" gap="3" align="start">
-          <Text size="4">{t("waiting", { count: waiting, kind })}</Text>
-          <Text muted>{t("waitingIn", { minutes })}</Text>
-          <Button
-            ref={showRef}
-            size="3"
-            onClick={() => setState({ ...state, clock: item.card!.due })}
-          >
-            {t("reviewNow")}
-          </Button>
-        </Flex>
-      </Card>
+      <Frame>
+        <Card>
+          <Flex direction="column" gap="3" align="start">
+            <Text size="4">{t("waiting", { count: waiting, kind })}</Text>
+            <Text muted>{t("waitingIn", { minutes })}</Text>
+            <Button
+              ref={showRef}
+              size="3"
+              onClick={() => setState({ ...state, clock: item.card!.due })}
+            >
+              {t("reviewNow")}
+            </Button>
+          </Flex>
+        </Card>
+      </Frame>
     );
   }
 
@@ -405,22 +462,18 @@ export function ReviewSession() {
   const done = Math.min(answered.length, total);
 
   return (
-    <Flex direction="column" gap="4">
+    <Frame progress={{ value: Math.round((done / total) * 100), label: t("progress", { current: repeat ? done : Math.min(done + 1, total), total }) }}>
       {state.missing !== null && <Text muted>{t("wordMissing", { word: state.missing })}</Text>}
-      <Flex direction="column" gap="2">
-        <MetaLabel>{t("progress", { current: repeat ? done : Math.min(done + 1, total), total })}</MetaLabel>
-        <Progress aria-label={t("progressLabel")} value={Math.round((done / total) * 100)} />
-      </Flex>
-      <FlashCard face={revealedAt === null ? "front" : "back"}>
-        <Headword size={revealedAt === null && !isPhraseRow(row) ? "hero" : "default"}>{cardFront(row)}</Headword>
+      <FlashCard centred face={revealedAt === null ? "front" : "back"}>
         {(card === null || repeat) && (
-          <Text size="2" muted>
+          <Text size="2" muted="quietest">
             {repeat ? t("repeat") : t(isPhraseRow(row) ? "newPhrase" : "newWord")}
           </Text>
         )}
+        <Headword size={revealedAt === null && !isPhraseRow(row) ? "hero" : "default"}>{cardFront(row)}</Headword>
         {revealedAt === null ? (
           phrase !== null && (
-            <Flex direction="column" gap="1">
+            <Flex direction="column" gap="1" align="center">
               <MetaLabel>{t("hintTitle")}</MetaLabel>
               <Text size="3" english>
                 {gapOutWord(phrase, forms)}
@@ -433,9 +486,9 @@ export function ReviewSession() {
             {drawn !== null ? (
               <>
                 <PosLabel>{tWord(`pos.${drawn.pos}`)}</PosLabel>
-                <TranslationList items={drawn.translations} lead />
+                <TranslationList items={drawn.translations} lead centred />
                 {drawn.definition !== null && (
-                  <Text size="2" muted english>
+                  <Text size="2" muted="secondary" english>
                     {drawn.definition}
                   </Text>
                 )}
@@ -461,38 +514,47 @@ export function ReviewSession() {
 
       <ActionBar>
         {revealedAt === null ? (
-          <Button ref={showRef} size="3" block onClick={() => setState({ ...state, revealedAt: Date.now() })}>
+          <Button ref={showRef} size="3" tall block onClick={() => setState({ ...state, revealedAt: Date.now() })}>
             {t("show")}
           </Button>
         ) : (
-          <Grid columns="4" gap="2">
-            {GRADES.map((grade) => {
+          <Grid columns="4" gap={{ initial: "2", lg: "3" }}>
+            {GRADES.map((grade, position) => {
               const { unit, count } = intervalUnit(intervals(card, revealedAt)[grade]);
               return (
                 <Button
                   key={grade}
                   ref={grade === "good" ? goodRef : undefined}
                   size="2"
+                  tall
+                  block
                   variant={grade === "good" ? "solid" : "soft"}
                   disabled={saving}
                   onClick={() => void answer(grade, Date.now())}
                 >
                   <Flex direction="column" align="center">
-                    {t(`grade.${grade}`)}
-                    <Text size="1">{t(`in.${unit}`, { count })}</Text>
+                    <Text size="3" weight="bold">
+                      {t(`grade.${grade}`)}
+                    </Text>
+                    <Text size="1">
+                      <Box as="span" display={{ initial: "none", lg: "inline" }}>
+                        {position + 1} ·{" "}
+                      </Box>
+                      {t(`in.${unit}`, { count })}
+                    </Text>
                   </Flex>
                 </Button>
               );
             })}
           </Grid>
         )}
-        {revealedAt !== null && (
-          <Box display={{ initial: "none", md: "block" }} pt="2">
-            <Text size="1" muted>
+        <Box display={{ initial: "none", lg: "block" }} pt="3">
+          <Flex justify="center">
+            <Text variant="caption" muted="quietest">
               {t("keysHint")}
             </Text>
-          </Box>
-        )}
+          </Flex>
+        </Box>
       </ActionBar>
       {failedSave && (
         // «Failure» in docs/wordbook/DESIGN.md: a hairline and the line in full ink. The grades above
@@ -504,6 +566,6 @@ export function ReviewSession() {
           </Text>
         </Flex>
       )}
-    </Flex>
+    </Frame>
   );
 }

@@ -31,6 +31,12 @@ export { Wordmark } from "./wordmark";
 
 export { Separator } from "./separator";
 
+export { Menu } from "./menu";
+
+export { Segments } from "./segments";
+
+export { Table } from "./table";
+
 export { Page } from "./page";
 
 export { Panels } from "./panels";

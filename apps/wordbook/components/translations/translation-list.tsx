@@ -15,11 +15,14 @@ export function TranslationList({
   items: rawItems,
   muted,
   lead,
+  centred,
 }: {
   items: readonly string[];
   muted?: boolean;
   // The first translation set large, as the entry's main one; the rest follow on the same line after « · », muted.
   lead?: boolean;
+  // Centres the line and its «ver N más» under it, for a card whose content is centred.
+  centred?: boolean;
 }) {
   const t = useTranslations("word");
   // The entry's line carries no trailing «...» or «…» a gloss may end on in the data, and no gloss twice.
@@ -34,7 +37,7 @@ export function TranslationList({
   const [first, ...rest] = line;
 
   return (
-    <Flex direction="column" gap="1" align="start">
+    <Flex direction="column" gap="1" align={centred ? "center" : "start"}>
       <Text variant="translation" muted={muted}>
         {lead && first !== undefined ? (
           <>

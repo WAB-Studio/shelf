@@ -14,11 +14,13 @@ import styles from "./text-field.module.css";
 type RootProps = ComponentPropsWithoutRef<typeof ThemesTextField.Root> & {
   edge?: boolean;
   label?: string;
+  // Keeps the label for a screen reader and draws none: the field's placeholder and place say it.
+  hideLabel?: boolean;
   pill?: boolean;
 };
 
 const Root = forwardRef<ComponentRef<typeof ThemesTextField.Root>, RootProps>(function Root(
-  { className, edge, label, pill, id, ...props },
+  { className, edge, label, hideLabel, pill, id, ...props },
   ref,
 ) {
   const generated = useId();
@@ -28,7 +30,7 @@ const Root = forwardRef<ComponentRef<typeof ThemesTextField.Root>, RootProps>(fu
   if (label === undefined) return field;
   return (
     <div className={styles.field}>
-      <label htmlFor={inputId} className={styles.label} data-field-label="">
+      <label htmlFor={inputId} className={hideLabel ? `${styles.label} ${styles.hidden}` : styles.label} data-field-label="">
         {label}
       </label>
       {field}

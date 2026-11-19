@@ -306,16 +306,34 @@ export async function afterFrames(page: Page): Promise<void> {
   );
 }
 
-// The two figures /registro heads its list with: the searches and the words (or entries) the record
-// holds. Found as one locator, so it is visible only while both read as given.
-export function studyHeader(page: Page, lookups: number, words: number, kind: "words" | "entries" = "words"): Locator {
+// The record's actions live in one «Descargar» menu that shuts on every choice. Opens it.
+export async function openDownloads(page: Page): Promise<void> {
+  await page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true }).click();
+}
+
+// «Vaciar el registro» is the menu's last item; it opens the question under the header.
+export async function askToClear(page: Page): Promise<void> {
+  await openDownloads(page);
+  await page.getByRole("menuitem", { name: messages.log.clear.trigger, exact: true }).click();
+}
+
+// A row's «⋯» menu and its «Quitar del registro» item: the way a row's question opens.
+export async function askToRemove(page: Page, word: string): Promise<void> {
   const t = createTranslator({ locale: "es", messages });
-  const lookupsLabel = `${lookups} ${t("log.study.figureLookups", { count: lookups })}`;
-  const wordsLabel = `${words} ${t("log.study.figureWords", { count: words, kind })}`;
+  await page.getByRole("button", { name: t("log.study.rowMenu", { word }), exact: true }).click();
+  await page.getByRole("menuitem", { name: messages.log.study.removeRow, exact: true }).click();
+}
+
+// What /registro says of its record: the words it holds, as the «Todas · N» filter counts them. The
+// searches and the entry/word wording are no longer drawn; their parameters keep the call sites
+// as they were.
+export function studyHeader(page: Page, lookups: number, words: number, kind: "words" | "entries" = "words"): Locator {
+  void lookups;
+  void kind;
+  const t = createTranslator({ locale: "es", messages });
   return page
     .locator("main")
-    .filter({ has: page.getByRole("group", { name: lookupsLabel, exact: true }) })
-    .filter({ has: page.getByRole("group", { name: wordsLabel, exact: true }) });
+    .filter({ has: page.getByRole("button", { name: t("log.study.filterAll", { count: words }), exact: true }) });
 }
 
 // Opens the fold under an entry that lists senses a reader meets seldom, when it has one. A spec that

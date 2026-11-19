@@ -11,6 +11,9 @@ import { SYNC_LANDED_EVENT, SYNC_LOCK } from "@/lib/sync/driver";
 import { clearAccountLookups } from "@/lib/sync/clear";
 import { Button, Flex, Link, Separator, TapTarget, Text } from "@/components/ui";
 
+// Fired by the download menu's «Vaciar el registro»: the question opens here, under the header.
+export const CLEAR_ASKED_EVENT = "wordbook:log-clear-asked";
+
 type CountState = { kind: "loading" } | { kind: "ready"; words: number; lookups: number; entries: "entries" | "words" } | { kind: "failed" };
 
 type Stage =
@@ -28,9 +31,9 @@ function clearLocalUnderLock(): Promise<void> {
 
 /**
  * «Vaciar el registro» (`RegistroVaciar`/`RegistroVaciarConfirmar`, approved
- * 2026-09-09): a muted counterpart to `ExportPanel`'s accent download,
+ * 2026-09-09): a counterpart to the download menu, whose last item asks it,
  * hidden the same way once nothing is left to act on. Fetches its own count
- * on mount, the same call `HistoryList` and `ExportPanel` each make on
+ * on mount, the same call `HistoryList` and `DownloadMenu` each make on
  * theirs — no import here reaches into a page's own IndexedDB except this
  * component's own effect (RNL-08).
  *
@@ -96,12 +99,15 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
     }
 
     read();
+    const asked = () => setStage((current) => (current.kind === "idle" ? { kind: "confirming" } : current));
+    window.addEventListener(CLEAR_ASKED_EVENT, asked);
     window.addEventListener(LOG_FLUSHED_EVENT, onChange);
     window.addEventListener(LOG_CLEARED_EVENT, onChange);
     window.addEventListener(LOG_DELETED_EVENT, onChange);
     window.addEventListener(SYNC_LANDED_EVENT, onChange);
     return () => {
       cancelled = true;
+      window.removeEventListener(CLEAR_ASKED_EVENT, asked);
       window.removeEventListener(LOG_FLUSHED_EVENT, onChange);
       window.removeEventListener(LOG_CLEARED_EVENT, onChange);
       window.removeEventListener(LOG_DELETED_EVENT, onChange);
@@ -142,27 +148,15 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
 
   // Nothing to act on: `study.header` already says so, and an action that
   // would only confirm an empty store repeats it with a control that does
-  // nothing (the same gate `ExportPanel` runs on the same count).
+  // nothing (the same gate `DownloadMenu` runs on the same count).
   if (count.kind !== "ready" || count.lookups === 0) return null;
 
-  if (stage.kind === "idle") {
-    return (
-      <Link asChild underline="always" muted>
-        <button type="button" onClick={() => setStage({ kind: "confirming" })}>
-          <TapTarget align="center" px="1">
-            {t("trigger")}
-          </TapTarget>
-        </button>
-      </Link>
-    );
-  }
+  // The trigger is the download menu's own item; nothing draws until it is asked.
+  if (stage.kind === "idle") return null;
 
   const wiping = stage.kind === "wiping";
 
   return (
-    // `width="100%"`: forces this item onto its own line under the row it
-    // shares with `ExportPanel`'s download link (`registro/page.tsx`'s own
-    // `wrap="wrap"`), instead of squeezing a multi-line confirm beside it.
     <Flex direction="column" gap="4" width="100%">
       <Separator size="4" />
 

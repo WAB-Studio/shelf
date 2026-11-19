@@ -8,7 +8,7 @@ import messages from "../messages/es.json";
 import { DATABASE_VERSION, LOG_FLUSHED_EVENT } from "../lib/log/record";
 import { LOG_DELETED_EVENT } from "../lib/log/delete";
 import type { LookupRecord, SyncState } from "../lib/log/types";
-import { expect, pageTasks, test } from "./fixtures";
+import { askToClear, askToRemove, expect, pageTasks, test } from "./fixtures";
 
 // RL-55 («empty it whole»): «Vaciar el registro» states the record as it is
 // now, after every delete, flush or pull, without a reload. Written from the
@@ -211,18 +211,19 @@ function zebraRound() {
   };
 }
 
-const trigger = (page: Page) => page.getByRole("button", { name: clear("trigger"), exact: true });
+// «Vaciar el registro» is the last item of the «Descargar» menu: the menu is what shows and goes with the record.
+const trigger = (page: Page) => page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true });
 const keep = (page: Page) => page.getByRole("button", { name: clear("keep"), exact: true });
 const body = (page: Page, words: number, lookups: number) =>
   page.getByText(clear("confirmBody", { words, lookups, kind: "words" }), { exact: true });
 const anyBody = (page: Page) => page.locator("p", { hasText: clear("confirmTitle") });
 const deleteX = (page: Page, word: string) =>
-  page.getByRole("button", { name: study("deleteRow", { word }), exact: true });
+  page.getByRole("button", { name: study("rowMenu", { word }), exact: true });
 const action = (page: Page, name: string) =>
   page.getByRole("button", { name, exact: true }).or(page.getByRole("link", { name, exact: true }));
 
 async function deleteViaUi(page: Page, word: string): Promise<void> {
-  await deleteX(page, word).click();
+  await askToRemove(page, word);
   await action(page, study("deleteConfirm")).click();
 }
 
@@ -232,7 +233,7 @@ test("Idle, a row deleted: the confirmation names the words and searches that ar
 
   await deleteViaUi(page, "leave");
   await expect(deleteX(page, "leave")).toHaveCount(0);
-  await trigger(page).click();
+  await askToClear(page);
   await expect(body(page, 2, 2)).toBeVisible();
   expect(loads()).toBe(0);
 });
@@ -241,7 +242,7 @@ test("Confirming, a row deleted under it: the body takes the new figures and the
   page,
 }) => {
   const loads = await openRecord(page, { lookups: leaveRows() });
-  await trigger(page).click();
+  await askToClear(page);
   await expect(body(page, 3, 4)).toBeVisible();
 
   await dropGroup(page, "leaf");
@@ -264,7 +265,7 @@ test("Empty after the last row: the trigger goes and the empty state shows", asy
 
 test("Empty after the last row, confirming: the open question goes with it", async ({ page }) => {
   const loads = await openRecord(page, { lookups: leaveRows() });
-  await trigger(page).click();
+  await askToClear(page);
   await expect(keep(page)).toBeVisible();
 
   for (const group of ["leave", "leaf", "left"]) await dropGroup(page, group);
@@ -295,14 +296,14 @@ test("Done, rows landed by a pull: the trigger appears on an open screen", async
 
   release();
   await expect(trigger(page)).toBeVisible();
-  await trigger(page).click();
+  await askToClear(page);
   await expect(body(page, 1, 1)).toBeVisible();
   expect(loads).toBe(0);
 });
 
 test("A flush on an open screen: the confirmation's counts rise by one", async ({ page }) => {
   const loads = await openRecord(page, { lookups: leaveRows() });
-  await trigger(page).click();
+  await askToClear(page);
   await expect(body(page, 3, 4)).toBeVisible();
 
   await page.evaluate(addRowScript(), { row: lookup("river") });
@@ -316,7 +317,7 @@ test("Stale reply: with the first read held and two events fired, the body shows
   page,
 }) => {
   const loads = await openRecord(page, { lookups: leaveRows() });
-  await trigger(page).click();
+  await askToClear(page);
   await expect(body(page, 3, 4)).toBeVisible();
 
   // A readwrite transaction on `lookups` keeps every later read waiting.
@@ -387,7 +388,7 @@ test("Stale reply: with the first read held and two events fired, the body shows
 
 test("Cancelled: «Conservarlo» closes the question and a later delete leaves it closed", async ({ page }) => {
   const loads = await openRecord(page, { lookups: leaveRows() });
-  await trigger(page).click();
+  await askToClear(page);
   await expect(body(page, 3, 4)).toBeVisible();
 
   await keep(page).click();

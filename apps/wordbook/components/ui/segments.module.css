@@ -1,0 +1,34 @@
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.segment {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--rl-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.segment:hover {
+  color: var(--rl-ink);
+}
+
+.segment[aria-pressed="true"] {
+  border-color: var(--rl-border);
+  background: var(--rl-raised);
+  color: var(--rl-ink);
+  font-weight: 600;
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--rl-accent);
+  outline-offset: 2px;
+}

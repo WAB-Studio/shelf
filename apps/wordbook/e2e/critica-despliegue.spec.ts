@@ -72,18 +72,19 @@ test("at 1280 the box keeps its width from an empty box to a phrase, and the pan
 });
 
 for (const width of [1280, 1600]) {
-  test(`at ${width} /, /registro, /repaso and /cuenta share one left edge`, async ({ page }) => {
+  test(`at ${width} /, /registro and /cuenta share one left edge`, async ({ page }) => {
     await open(page, "/registro", width);
     const edges: number[] = [];
-    for (const route of ["/registro", "/repaso", "/cuenta"]) {
+    // /repaso is a centred column of its own: escritorio-registro.spec.ts holds its edges.
+    for (const route of ["/registro", "/cuenta"]) {
       await page.goto(route);
       edges.push(Math.round((await page.getByRole("heading", { level: 1 }).boundingBox())!.x));
     }
     await open(page, "/", width);
     edges.push(Math.round((await box(page).boundingBox())!.x));
-    expect(new Set(edges.slice(0, 3)).size).toBe(1);
+    expect(new Set(edges.slice(0, 2)).size).toBe(1);
     // The box sits a padding in from the same edge.
-    expect(Math.abs(edges[3] - edges[0])).toBeLessThan(40);
+    expect(Math.abs(edges[2] - edges[0])).toBeLessThan(40);
   });
 }
 
@@ -93,11 +94,10 @@ test("a /registro row is one compact line, and the story and the row count the s
   await box(page).fill("time");
   await expect(page.locator("main aside")).toContainText("Buscada 2 veces");
 
-  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("link", { name: messages.nav.log }).click();
-  const row = page.locator("main section").first();
+  const row = page.getByRole("row").filter({ has: page.locator('a[href^="/registro/"]') }).first();
   await expect(row).toContainText("time");
-  await expect(row).toContainText("2 VECES", { ignoreCase: true });
+  await expect(row.getByRole("cell", { name: "2", exact: true })).toBeVisible();
   expect((await row.boundingBox())!.height).toBeLessThan(60);
 });
 

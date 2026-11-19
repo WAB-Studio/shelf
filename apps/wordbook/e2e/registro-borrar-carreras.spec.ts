@@ -7,7 +7,7 @@ import messages from "../messages/es.json";
 import { DATABASE_VERSION, LOG_FLUSHED_EVENT } from "../lib/log/record";
 import { LOG_DELETED_EVENT } from "../lib/log/delete";
 import type { LookupRecord, SyncState } from "../lib/log/types";
-import { expect, studyHeader, test } from "./fixtures";
+import { askToRemove, expect, studyHeader, test } from "./fixtures";
 
 // RL-66, RL-56: the /registro row list around a delete. Written from the
 // contract (a delete that finds nothing returns the row to idle; a late read
@@ -214,14 +214,14 @@ const fire = (page: Page, name: string) => page.evaluate((n) => window.dispatchE
 
 const rowLink = (page: Page, word: string) => page.locator(`a[href="/registro/${word}"]`);
 const deleteX = (page: Page, word: string) =>
-  page.getByRole("button", { name: study("deleteRow", { word }), exact: true });
+  page.getByRole("button", { name: study("rowMenu", { word }), exact: true });
 const action = (page: Page, name: string) =>
   page.getByRole("button", { name, exact: true }).or(page.getByRole("link", { name, exact: true }));
 const header = (page: Page, lookups: number, words: number) => studyHeader(page, lookups, words);
 const deleting = (page: Page) => page.getByText(study("deleting"), { exact: true });
 
 async function deleteViaUi(page: Page, word: string): Promise<void> {
-  await deleteX(page, word).click();
+  await askToRemove(page, word);
   await action(page, study("deleteConfirm")).click();
 }
 
@@ -251,7 +251,7 @@ test("A slow read never overwrites a newer one: a delete under a held read ends 
 
   await hold(page);
   await fire(page, LOG_FLUSHED_EVENT); // a reread starts and waits behind the hold
-  await deleteX(page, "leave").click();
+  await askToRemove(page, "leave");
   await action(page, study("deleteConfirm")).click();
   await expect(deleting(page)).toBeVisible();
   await release(page);

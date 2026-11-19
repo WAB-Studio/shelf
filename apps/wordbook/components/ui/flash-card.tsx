@@ -4,9 +4,12 @@ import styles from "./flash-card.module.css";
 
 // The review's card: one entry centred on a surface of fixed proportions. Each `face` turns in when it
 // first shows (a flip, unless the reader asked for less motion); the back may grow past the ratio.
-export function FlashCard({ face, children }: { face: "front" | "back"; children?: ReactNode }) {
+//
+// `centred`: from 1024px the card fills the column it is given instead of keeping its ratio, with a
+// rounder corner and more air around what it holds.
+export function FlashCard({ face, centred, children }: { face: "front" | "back"; centred?: boolean; children?: ReactNode }) {
   return (
-    <section className={styles.card}>
+    <section className={centred ? `${styles.card} ${styles.centred}` : styles.card}>
       <div key={face} className={styles.face}>
         {children}
       </div>

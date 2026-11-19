@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { confirmCopy, expect, studyHeader, test } from "./fixtures";
+import { askToClear, confirmCopy, expect, studyHeader, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import postgres from "postgres";
 
@@ -318,7 +318,7 @@ test("a lookup's row lists the typed word, its count and the dictionary's own tr
   const link = page.locator('a[href="/registro/apple"]');
   await expect(link).toBeVisible();
   // The row is a card: the link holds the word and its count, its main translation sits under it.
-  const rowText = await link.locator("xpath=ancestor::section[1]").innerText();
+  const rowText = await link.locator("xpath=ancestor::*[@role='row'][1]").innerText();
   expect(rowText).toContain("apple");
   expect(rowText).toContain("1");
 
@@ -381,10 +381,10 @@ test("with no rows, /registro draws the study's empty state and its action retur
   await expect(page.getByText(messages.log.study.emptyTitle)).toBeVisible();
   await expect(page.getByText(messages.log.study.emptyBody)).toBeVisible();
 
-  // The empty study already says there is nothing here; a download link
+  // The empty study already says there is nothing here; a download menu
   // for a file with no rows in it would only repeat that with an action
   // that does not work.
-  await expect(page.getByRole("button", { name: messages.log.study.download })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true })).toHaveCount(0);
   await expect(studyHeader(page, 0, 0)).toHaveCount(0);
 
   await page.getByRole("button", { name: messages.log.study.emptyAction }).click();
@@ -514,7 +514,7 @@ test("RNL-02: the failed /registro title is full-weight ink, never muted, accent
   }
 });
 
-test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar el registro» accent, and its confirm keeps the accent off both destructive options — no red, in light and dark", async ({
+test("/registro's «Vaciar el registro» confirm keeps the accent off both destructive options — no red, in light and dark", async ({
   page,
 }) => {
   test.setTimeout(45_000);
@@ -543,25 +543,18 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
     // both roles this reads — the accent and the muted tone both change
     // between the two passes below, not just which token wins.
     const palette = {
-      // «Verde botella»: the accent text is bottle green in light, mint in dark; the filled button
-      // stays bottle green in both.
-      light: { accent: "#2D5BA8", solid: "#2D5BA8", muted: "#5F6670" },
-      dark: { accent: "#8DB4F2", solid: "#8DB4F2", muted: "#959CA7" },
+      // «Gris frío y azul»: the filled button is the accent of each scheme.
+      light: { solid: "#2D5BA8", muted: "#5F6670" },
+      dark: { solid: "#8DB4F2", muted: "#959CA7" },
     } as const;
 
     for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.goto("/registro");
 
-      const download = page.getByRole("button", { name: messages.log.study.download });
-      const clearTrigger = page.getByRole("button", { name: messages.log.clear.trigger });
-      await expect(download).toBeVisible();
-      await expect(clearTrigger).toBeVisible();
+      await expect(page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true })).toBeVisible();
 
-      expect(await computedColor(download)).toBe(hexToRgb(palette[scheme].accent));
-      expect(await computedColor(clearTrigger)).toBe(hexToRgb(palette[scheme].muted));
-
-      await clearTrigger.click();
+      await askToClear(page);
       const keep = page.getByRole("button", { name: messages.log.clear.keep });
       const localAction = page.getByRole("button", { name: messages.log.clear.localAction });
       const accountAction = page.getByRole("button", { name: messages.log.clear.accountAction });
@@ -645,7 +638,7 @@ test("without a session, the confirm panel draws no account option at all, and t
   await recordSearch(page, "apple");
 
   await page.goto("/registro");
-  await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+  await askToClear(page);
 
   await expect(page.getByRole("button", { name: messages.log.clear.keep })).toBeVisible();
   await expect(page.getByRole("button", { name: messages.log.clear.soleAction })).toBeVisible();
@@ -668,7 +661,7 @@ test("«Conservarlo» closes the confirmation without deleting anything", async 
   await page.goto("/registro");
   await expect(studyHeader(page, 1, 1)).toBeVisible();
 
-  await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+  await askToClear(page);
   const keep = page.getByRole("button", { name: messages.log.clear.keep });
   await expect(keep).toBeVisible();
   await keep.click();
@@ -694,7 +687,7 @@ test("without a session, «Vaciar el registro» empties IndexedDB, falls to the 
   await recordSearch(page, "apple");
 
   await page.goto("/registro");
-  await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+  await askToClear(page);
   await page.getByRole("button", { name: messages.log.clear.soleAction }).click();
 
   await expect(page.getByText(messages.log.study.emptyTitle)).toBeVisible();
@@ -715,7 +708,7 @@ test("without a session, «Vaciar el registro» empties IndexedDB, falls to the 
   await expect(page.locator('a[href="/registro/banana"]')).toBeVisible();
 });
 
-test("without a session, «Vaciar el registro» drops the download link too, with no reload", async ({ page }) => {
+test("without a session, «Vaciar el registro» drops the download menu too, with no reload", async ({ page }) => {
   await deleteTranslator(page);
 
   const firstAsset = page.waitForResponse(
@@ -728,13 +721,13 @@ test("without a session, «Vaciar el registro» drops the download link too, wit
   await recordSearch(page, "apple");
 
   await page.goto("/registro");
-  const download = page.getByRole("button", { name: messages.log.study.download });
+  const download = page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true });
   await expect(download).toBeVisible();
 
-  await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+  await askToClear(page);
   await page.getByRole("button", { name: messages.log.clear.soleAction }).click();
 
-  // No `page.reload()` anywhere here: `ExportPanel` has to notice the wipe
+  // No `page.reload()` anywhere here: `DownloadMenu` has to notice the wipe
   // on its own, the same way the study above it already does.
   await expect(page.getByText(messages.log.study.emptyTitle)).toBeVisible();
   await expect(download).toHaveCount(0);
@@ -781,7 +774,7 @@ test("«Vaciar solo en este dispositivo» does not come back on the next sync", 
     let rows = await readLogRows(page);
     expect(rows.map((row) => row.normalised), "the foreign row never made it down").toContain("foreign-word");
 
-    await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+    await askToClear(page);
     await page.getByRole("button", { name: messages.log.clear.localAction }).click();
     await expect(page.getByText(messages.log.study.emptyTitle)).toBeVisible();
     rows = await readLogRows(page);
@@ -883,9 +876,8 @@ test("«Vaciar aquí y en mi cuenta» empties every device's copy, and a reader 
     await page.goto("/registro");
     await openedSync;
 
-    const clearTrigger = page.getByRole("button", { name: messages.log.clear.trigger });
-    await expect(clearTrigger).toBeVisible();
-    await clearTrigger.click();
+    await expect(page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true })).toBeVisible();
+    await askToClear(page);
 
     const clearResponse = page.waitForResponse(
       (response) => response.url().includes("/api/log/clear") && response.request().method() === "DELETE",

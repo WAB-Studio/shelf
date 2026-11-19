@@ -10,7 +10,7 @@ import { DATABASE_VERSION } from "../lib/log/record";
 import { LOG_DELETED_EVENT } from "../lib/log/delete";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
-import { afterFrames, expect, freezeTimers, runClock, studyHeader, test } from "./fixtures";
+import { afterFrames, askToRemove, expect, freezeTimers, runClock, studyHeader, test } from "./fixtures";
 
 // K10, RL-66, RL-70, RNL-11: each /registro row carries a ✕ that deletes its
 // group. Written from SPEC RL-66/RL-70, RNL-11 (successor of RNL-09, approved
@@ -194,7 +194,7 @@ function trackRounds(page: Page): { count: () => number; bodies: Array<{ tombsto
 
 const rowLink = (page: Page, word: string) => page.locator(`a[href="/registro/${word}"]`);
 const deleteX = (page: Page, word: string) =>
-  page.getByRole("button", { name: study("deleteRow", { word }), exact: true });
+  page.getByRole("button", { name: study("rowMenu", { word }), exact: true });
 // «Conservar», «Borrar» and «Reintentar» are a button or a link by name; the
 // boards call two of them links. Exact: «Borrar» is a prefix of the ✕'s name.
 const action = (page: Page, name: string) =>
@@ -235,7 +235,7 @@ async function openRecord(page: Page, seedRows: Parameters<typeof seed>[1]): Pro
 }
 
 async function deleteViaUi(page: Page, word: string): Promise<void> {
-  await deleteX(page, word).click();
+  await askToRemove(page, word);
   await action(page, study("deleteConfirm")).click();
 }
 
@@ -255,7 +255,7 @@ for (const viewport of [
   { width: 360, height: 740 },
   { width: 1280, height: 800 },
 ]) {
-  test(`Idle (${viewport.width}): every row has a ✕ named with its word, at least 44 px, beside its link and never inside it; the word still opens its page`, async ({
+  test(`Idle (${viewport.width}): every row has a «⋯» menu named with its word, at least 44 px, beside its link and never inside it; the word still opens its page`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -263,7 +263,7 @@ for (const viewport of [
     for (const word of ["leave", "leaf", "left"]) {
       await expect(rowLink(page, word)).toBeVisible();
       const button = deleteX(page, word);
-      await expect(button, `✕ of ${word}`).toBeVisible();
+      await expect(button, `menu of ${word}`).toBeVisible();
       const box = (await button.boundingBox())!;
       expect(box.width, `${word} ✕ width`).toBeGreaterThanOrEqual(44);
       expect(box.height, `${word} ✕ height`).toBeGreaterThanOrEqual(44);
@@ -279,9 +279,10 @@ for (const viewport of [
     // The board's header and the filter's «Borrar el filtro» never share a name.
     await expect(page.getByRole("button", { name: study("filterClear") })).toHaveCount(0);
 
-    // Tapping the ✕ never navigates.
+    // Opening the row's menu never navigates.
     await deleteX(page, "leaf").click();
     await expect(page).toHaveURL((url) => url.pathname === "/registro");
+    await page.keyboard.press("Escape");
 
     // Tapping the word does.
     await rowLink(page, "left").click();
@@ -298,7 +299,7 @@ test("Asking, copy on: the question promises every device and carries no local n
   await opened;
   await expect(rowLink(page, "leave")).toBeVisible();
 
-  await deleteX(page, "leave").click();
+  await askToRemove(page, "leave");
   await expect(confirmTitle(page, "leave")).toBeVisible();
   await expect(bodyEveryDevice(page, 2)).toBeVisible();
   await expect(bodyThisDevice(page, 2)).toHaveCount(0);
@@ -321,7 +322,7 @@ for (const [variant, makeSync, noted] of [
     await expect(rowLink(page, "leave")).toBeVisible();
     await page.waitForLoadState("networkidle");
 
-    await deleteX(page, "leave").click();
+    await askToRemove(page, "leave");
     await expect(confirmTitle(page, "leave")).toBeVisible();
     await expect(bodyThisDevice(page, 2)).toBeVisible();
     await expect(bodyEveryDevice(page, 2), "promised every device").toHaveCount(0);
@@ -343,14 +344,14 @@ test("Cancelled: «Conservar» closes the local question and nothing is deleted;
   await openRecord(page, { lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
 
-  await deleteX(page, "leave").click();
+  await askToRemove(page, "leave");
   await expect(confirmTitle(page, "leave")).toBeVisible();
   await expect(bodyThisDevice(page, 2)).toBeVisible();
   await expect(deleteX(page, "leave"), "the row's ✕ hides while its question is open").toHaveCount(0);
   await expect(page).toHaveURL((url) => url.pathname === "/registro");
 
   // A second row's question closes the first.
-  await deleteX(page, "left").click();
+  await askToRemove(page, "left");
   await expect(confirmTitle(page, "left")).toBeVisible();
   await expect(bodyThisDevice(page, 1)).toBeVisible();
   await expect(confirmTitle(page, "leave")).toHaveCount(0);
@@ -390,7 +391,7 @@ test("Pending: a double tap on «Borrar» deletes once and shows «Borrando…»
       }),
   );
 
-  await deleteX(page, "leave").click();
+  await askToRemove(page, "leave");
   // Two taps inside one task, before any render can intervene.
   await action(page, study("deleteConfirm")).evaluate((el) => {
     (el as HTMLElement).click();
@@ -455,7 +456,7 @@ test("Failed: an aborted transaction leaves the row and says so; «Conservar» c
 
   const failure = page.getByRole("alert").filter({ hasText: study("deleteFailedTitle", { word: "leave" }) });
   // Signed out with its reader: the question carries the note, the failure block never does.
-  await deleteX(page, "leave").click();
+  await askToRemove(page, "leave");
   await expect(localNote(page)).toBeVisible();
   await action(page, study("deleteConfirm")).click();
   await expect(failure).toBeVisible();
@@ -844,7 +845,7 @@ test("Deleting: while the delete is held, «Conservar» and «Borrar» are both 
       }),
   );
 
-  await deleteX(page, "leave").click();
+  await askToRemove(page, "leave");
   await action(page, study("deleteConfirm")).click();
   // While held, «Borrar» reads «Borrando…»: that is the same button.
   await expect(action(page, study("deleting"))).toBeDisabled();
