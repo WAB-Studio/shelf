@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { appClass, appTone, mainSiteClass, siteClass, timeByClass } from "./app-classes";
+import { appClass, appTone, mainSiteClass, pageClass, siteClass, timeByClass } from "./app-classes";
 
 test("an app takes its class by its readable name; Sistema is its own and an unknown app is «other»", () => {
   assert.equal(appClass("VS Code", "Sistema"), "code");
@@ -106,4 +106,41 @@ test("the main class of sites ignores «other»; the browser draws in it, Claude
   assert.equal(appTone("Claude", "Sistema"), "claudeApp");
   assert.equal(appTone("VS Code", "Sistema"), "code");
   assert.equal(appTone("Sistema", "Sistema"), "system");
+});
+
+test("the study sites and Anki are «study»; the specific rule beats `*.vercel.app` (RT-32)", () => {
+  assert.equal(siteClass("wordbookapp.vercel.app"), "study");
+  assert.equal(siteClass("other.vercel.app"), "code");
+  assert.equal(siteClass("www.duolingo.com"), "study");
+  assert.equal(siteClass("ankiweb.net"), "study");
+  assert.equal(siteClass("es.khanacademy.org"), "study");
+  assert.equal(appClass("Anki", "Sistema"), "study");
+});
+
+test("a page titled studyAid is study whatever its host", () => {
+  assert.equal(pageClass("localhost:5173", "Ejercicios · studyAid"), "study");
+  assert.equal(pageClass("localhost:5173", "Diagnóstico: Inglés · studyAid"), "study");
+  assert.equal(pageClass("localhost:5173", "STUDYAID"), "study");
+  assert.equal(pageClass("localhost:5173", "Vite App"), "code");
+  assert.equal(pageClass("localhost:5173", "studyAid notes in code"), "code");
+});
+
+test("a host's seconds split by its pages: study pages to «study», the rest keep the host's class", () => {
+  const sites = [{ host: "localhost:5173", seconds: 1000 }];
+  const pages = [
+    { host: "localhost:5173", title: "Ejercicios · studyAid", seconds: 600 },
+    { host: "localhost:5173", title: "Vite App", seconds: 100 },
+  ];
+  assert.deepEqual(timeByClass([{ app: "Chrome", seconds: 1000 }], sites, "Sistema", pages), [
+    { kind: "study", seconds: 600 },
+    { kind: "code", seconds: 400 },
+  ]);
+  assert.equal(mainSiteClass(sites, pages), "study");
+});
+
+test("without pages a host keeps its class; study pages beyond the host's seconds are capped", () => {
+  const sites = [{ host: "localhost:5173", seconds: 500 }];
+  assert.deepEqual(timeByClass([{ app: "Chrome", seconds: 500 }], sites, "Sistema"), [{ kind: "code", seconds: 500 }]);
+  const pages = [{ host: "localhost:5173", title: "studyAid", seconds: 900 }];
+  assert.deepEqual(timeByClass([{ app: "Chrome", seconds: 500 }], sites, "Sistema", pages), [{ kind: "study", seconds: 500 }]);
 });

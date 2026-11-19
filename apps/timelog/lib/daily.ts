@@ -21,17 +21,6 @@ export type DailyRow = {
   uploaded: number;
 };
 
-export type ClaudeSource = { key: "code" | "web" | "desktop"; tone: "claude" | "claudeWeb" | "claudeApp"; name: string; seconds: number };
-
-// Claude Code, claude.ai and the desktop app of a day, in that order, each under its name.
-export function claudeSources(claude: Pick<ClaudeDay, "code" | "web" | "desktop"> | undefined, names: { code: string; web: string; desktop: string }): ClaudeSource[] {
-  return [
-    { key: "code", tone: "claude", name: names.code, seconds: claude?.code ?? 0 },
-    { key: "web", tone: "claudeWeb", name: names.web, seconds: claude?.web ?? 0 },
-    { key: "desktop", tone: "claudeApp", name: names.desktop, seconds: claude?.desktop ?? 0 },
-  ];
-}
-
 // What the person spent in front of Claude: claude.ai and the app. Claude Code is the agent's work, never added to it.
 export const claudeTotal = (one: Pick<ClaudeDay, "code" | "web" | "desktop">) => one.code + one.web + one.desktop;
 
@@ -89,11 +78,4 @@ const COLUMNS: (keyof DailyRow)[] = [
 // RFC 4180: comma, CRLF, a closing newline.
 export function toCsv(rows: DailyRow[]): string {
   return [COLUMNS.join(","), ...rows.map((row) => COLUMNS.map((name) => cell(row[name])).join(","))].join("\r\n") + "\r\n";
-}
-
-// What «Semana» tells a week with no Claude time: nothing yet because no upload ever arrived (so «Llaves» is where to start),
-// a source that never sent, or a source that sent but not this week.
-export function claudeWeekHint(span: { lastReceived: Date | null; hasSites: boolean; hasClaudeCode: boolean }): "connect" | "never" | "none" {
-  if (span.lastReceived === null) return "connect";
-  return span.hasClaudeCode || span.hasSites ? "none" : "never";
 }

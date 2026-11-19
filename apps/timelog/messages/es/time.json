@@ -8,9 +8,7 @@
       "minutes": "hace {n} min",
       "hours": "hace {n} h",
       "days": "hace {n} d"
-    },
-    "tinyHours": "h",
-    "tinyMinutes": "m"
+    }
   },
   "nav": {
     "label": "Secciones",
@@ -19,9 +17,7 @@
     "keys": "Llaves"
   },
   "today": {
-    "title": "{weekday} {day} de {month}",
-    "total": "Hoy en la computadora",
-    "totalPast": "Ese día en la computadora",
+    "title": "{weekday} {date}",
     "empty": "Sin datos de hoy",
     "emptyPast": "Sin datos de ese día",
     "emptyWhy": "Todavía no ha subido nada hoy: la PC sube cada hora. Si estuvo encendida, deja ActivityWatch abierto y espera la próxima subida.",
@@ -30,65 +26,39 @@
     "never": "Todavía no ha llegado ninguna subida. Instala ActivityWatch + TimeLog en tu PC con el instalador de «Llaves» y pega una llave: sube sola cada hora.",
     "bar": "{app}: {duration}",
     "updated": "Actualizado {ago}",
-    "topApp": "La que más usaste",
-    "versus": "Frente al día anterior",
-    "versusMore": "+{duration}",
-    "versusLess": "−{duration}",
     "connect": "Conectar mi PC",
-    "versusSame": "Igual que el día anterior",
     "apps": "Apps",
     "projects": "Proyectos",
     "projectBar": "{project}: {duration}",
     "projectsMore": "{n, plural, one {y # proyecto más · {duration}} other {y # proyectos más · {duration}}}",
-    "claudeCard": "Claude",
     "windowBar": "{title}: {duration}",
     "windowsMore": "y {n} ventanas más",
-    "byClass": "En qué se fue",
     "byClassLabel": "El día repartido por clase de app",
-    "claudeGlance": "{duration} con Claude en pantalla · {percent} % del día",
-    "claudeAgent": "Claude Code trabajó {duration} por su cuenta",
-    "claudeNoneDay": "Sin Claude en pantalla ese día.",
-    "claudeNoneToday": "Sin Claude en pantalla hoy todavía.",
-    "devicesSum": "Suma de {n} equipos",
     "appsMore": "y {n} apps más · {duration}",
-    "stripDay": "{weekday} {day} de {month}",
-    "stripDayEmpty": "{weekday} {day} de {month}, sin subida",
-    "stripPrev": "Semana anterior",
-    "stripNext": "Semana siguiente",
-    "stripDayPrev": "Día anterior",
-    "stripDayNext": "Día siguiente"
+    "line": "{duration} en la computadora",
+    "devices": "Suma de {n} equipos · {list}",
+    "prevDay": "Día anterior",
+    "nextDay": "Día siguiente",
+    "toToday": "Hoy"
   },
   "week": {
-    "title": "Del {from} al {to}",
+    "title": "{from} – {to}",
     "prev": "Semana anterior",
     "next": "Semana siguiente",
-    "apps": "Apps de la semana",
     "noApps": "Nada esta semana.",
-    "none": "—",
     "bar": "{day}: {duration}",
-    "total": "Total de la semana",
     "upcoming": "{day}: aún no llega",
     "export": "Exportar esta semana",
-    "claudeWeekTotal": "Claude en pantalla en la semana",
-    "claudeAgentWeek": "Claude Code trabajó {duration} por su cuenta",
-    "claudeHint": {
-      "connect": "Todavía no ha llegado nada de tu PC. Conéctala desde «Llaves» y el tiempo de Claude aparecerá aquí.",
-      "never": "Todavía no llega tiempo de Claude. Mira «Hoy» para ver cómo conectarlo.",
-      "none": "Sin Claude en pantalla esta semana."
-    },
-    "connect": "Conectar mi PC",
-    "heatmap": "Tiempo de cada app, día por día",
-    "cell": "{app}, {day}: {duration}",
-    "restBar": "{app}: {duration}",
-    "appsMore": "y {n} apps más · {duration}",
     "exportMore": "Exportar otras fechas",
-    "projects": "Proyectos de la semana",
-    "internet": "Internet de la semana"
+    "line": "{duration} en la computadora",
+    "thisWeek": "Esta semana",
+    "empty": "Nada esta semana.",
+    "appDayBar": "{app}, {day}: {duration}",
+    "firstUse": "Todavía no ha llegado nada de tu PC."
   },
   "keys": {
     "title": "Llaves",
-    "intro": "Una llave deja que el script de tu PC suba el resumen del día y que Claude lo lea. Se muestra una sola vez.",
-    "install": "En Windows, instala ActivityWatch + TimeLog y pega la llave en su ícono, junto al reloj: «TimeLog: pegar llave…». Sube solo cada hora.",
+    "install": "En Windows, instala ActivityWatch + TimeLog y pega la llave en su ícono: sube sola cada hora.",
     "download": "Descargar el instalador para Windows",
     "name": "Nombre de la llave",
     "namePlaceholder": "PC de la casa",
@@ -107,7 +77,7 @@
     "revoked": "revocada",
     "revoke": "Revocar",
     "revokeLabel": "Revocar la llave {name}",
-    "none": "Todavía no hay llaves.",
+    "none": "Todavía no hay llaves: crea una para conectar tu PC.",
     "keyBlock": "Tu llave",
     "copyKey": "Copiar llave",
     "copyCommand": "Copiar comando",
@@ -115,14 +85,11 @@
     "confirmYes": "Sí, revocar",
     "confirmNo": "Cancelar",
     "claudeTitle": "Conectar Claude",
-    "claudeIntro": "Claude puede leer tus días con una llave: tus apps, tu semana y el CSV de «Exportar». Solo lee, no cambia nada. Agrega el servidor en Claude Code con el bloque de abajo; en otro cliente de Claude usa la dirección y manda la llave en el encabezado Authorization: Bearer.",
-    "claudeAddress": "Dirección del servidor",
-    "copyAddress": "Copiar dirección",
-    "claudeCommand": "Agregarlo a Claude Code:",
+    "claudeCommand": "Agregarlo a Claude Code",
     "copyClaudeCommand": "Copiar comando de Claude",
     "keyPlaceholder": "TU_LLAVE",
-    "claudeKeyHint": "Cambia TU_LLAVE por una llave tuya. Al crear una llave nueva, el bloque la trae puesta.",
-    "claudeAsk": "Pregúntale, por ejemplo: «¿cuánto usé el computador la semana pasada?»."
+    "claudeKeyHint": "Cambia TU_LLAVE por una llave tuya.",
+    "claudeIntro": "Claude lee tus días con una llave, sin cambiar nada."
   },
   "signIn": {
     "title": "Entrar",
@@ -144,22 +111,15 @@
     "back": "Ir a Hoy"
   },
   "claude": {
-    "title": "Claude",
-    "code": "Claude Code",
-    "web": "claude.ai",
-    "desktop": "App de Claude",
-    "screen": "Claude en pantalla",
-    "agent": "Trabajo del agente",
-    "bar": "{name}: {duration}",
-    "empty": "Sin Claude en pantalla ese día.",
-    "emptyToday": "Sin Claude en pantalla hoy todavía.",
-    "never": "Todavía no llega tiempo de Claude Code. Se lee de su carpeta de sesiones en tu PC; si lo usas en WSL, indica esa carpeta en aw-timelog.toml (claude_dir) y espera la próxima subida.",
-    "sessions": "Sesiones de Claude Code",
+    "never": "Todavía no llega tiempo de Claude Code: se lee de su carpeta de sesiones en tu PC, y en WSL se indica en aw-timelog.toml (claude_dir).",
     "session": "{project}: {duration}",
-    "span": "{from} – {to}"
+    "span": "{from} – {to}",
+    "screenAgent": "Claude: {screen} en pantalla · Claude Code trabajó {agent}",
+    "screenOnly": "Claude: {screen} en pantalla",
+    "sessionsMore": "y {n} sesiones más"
   },
   "internet": {
-    "title": "Internet",
+    "title": "Sitios",
     "bar": "{host}: {duration}",
     "empty": "Sin sitios ese día.",
     "emptyToday": "Sin sitios hoy todavía.",
@@ -172,7 +132,7 @@
   },
   "export": {
     "title": "Exportar",
-    "intro": "Un CSV con una fila por día, hasta hoy: tiempo en la computadora, Claude Code (el trabajo del agente), claude.ai, la app de Claude, el total de Claude, Claude en pantalla (claude.ai y la app), la app más usada y si ese día llegó una subida, todo en segundos. Claude lee las mismas filas con la herramienta get_daily.",
+    "intro": "Un CSV con una fila por día, hasta hoy.",
     "from": "Desde",
     "to": "Hasta",
     "download": "Descargar CSV",
@@ -181,12 +141,9 @@
     "last30": "Últimos 30 días",
     "thisMonth": "Este mes",
     "badRange": "El rango no sirvió: «Desde» va antes o el mismo día que «Hasta», con hasta 366 días.",
-    "back": "Semana"
-  },
-  "timeline": {
-    "title": "Claude Code durante el día",
-    "label": "Sesiones de Claude Code a lo largo del día",
-    "session": "{project}: de {from} a {to}"
+    "back": "Semana",
+    "detailsTitle": "Qué trae el archivo",
+    "details": "Por día, en segundos: tiempo en la computadora, Claude Code (el trabajo del agente), claude.ai, la app de Claude, el total de Claude, Claude en pantalla (claude.ai y la app), la app más usada y si ese día llegó una subida."
   },
   "classes": {
     "code": "Programar",
@@ -196,6 +153,7 @@
     "games": "Juegos",
     "social": "Videos y redes",
     "shopping": "Compras y pagos",
+    "study": "Estudio",
     "system": "Sistema",
     "other": "Otras"
   }

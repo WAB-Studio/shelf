@@ -17,7 +17,7 @@
   --tl-mark-edge: #22d3ee; /* its 1px border: 5.53 on the tint */
   /* One colour per class of app, fixed (docs/timelog/DESIGN.md). Contrast on the ground / on raised, ink #0c0e11 on it:
      Programar 10.69/9.68, IA 10.05/9.10, Reuniones 7.10/6.43, Mensajes 7.60/6.88, Juegos 7.30/6.60, Videos 12.82/11.60,
-     Compras 7.85/7.11, Sistema 6.77/6.13, Otras 8.59/7.78, claude 8.54/7.73. */
+     Compras 7.85/7.11, Estudio 6.99/6.32, Sistema 6.77/6.13, Otras 8.59/7.78, claude 8.54/7.73. */
   --tl-tone-code: #22d3ee;
   --tl-tone-ai: #34d399;
   --tl-tone-work: #a78bfa;
@@ -25,6 +25,7 @@
   --tl-tone-games: #f472b6;
   --tl-tone-social: #a3e635;
   --tl-tone-shopping: #e879f9;
+  --tl-tone-study: #f87171;
   --tl-tone-system: #8f9aa8;
   --tl-tone-other: #d9a441;
   --tl-tone-claude: #fb923c;
@@ -38,6 +39,7 @@
   --tl-tone-games-on-block: #f472b6;
   --tl-tone-social-on-block: #a3e635;
   --tl-tone-shopping-on-block: #e879f9;
+  --tl-tone-study-on-block: #f87171;
   --tl-tone-system-on-block: #8f9aa8;
   --tl-tone-other-on-block: #d9a441;
   --tl-tone-claude-on-block: #fb923c;
@@ -80,6 +82,7 @@
     --tl-tone-games: #b8226b;
     --tl-tone-social: #44660a;
     --tl-tone-shopping: #a21caf;
+    --tl-tone-study: #b91c1c; /* ink #f6f8fa on it 6.08, on raised 5.49 */
     --tl-tone-system: #566170;
     --tl-tone-other: #8a5a00; /* ink #f6f8fa on each: 6.05, 5.88, 5.51, 5.66, 5.67, 6.26, 5.94, 5.91, 5.57 */
     --tl-tone-claude: #9a3a08; /* the three Claude shades, on raised #e8edf2: 5.98, 3.50, 9.30; the middle one clears 3:1 */

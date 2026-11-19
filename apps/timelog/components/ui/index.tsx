@@ -5,32 +5,46 @@ import styles from "./ui.module.css";
 
 const join = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(" ");
 
-// `wide` opens the page to 1200 for the screens that split into a block and its rows.
-export function Page({ wide, children }: { wide?: boolean; children: ReactNode }) {
-  return <main className={join(styles.page, wide && styles.pageWide)}>{children}</main>;
+// One column, 760 at most, the same on every screen so the header never moves.
+export function Page({ children }: { children: ReactNode }) {
+  return <main className={styles.page}>{children}</main>;
 }
 
-// A form's column inside the wide page: the header keeps its place from one screen to the next.
-export function Narrow({ children }: { children: ReactNode }) {
-  return <div className={styles.narrow}>{children}</div>;
-}
-
-// The brand block on top, wide; the cards of the day in a mosaic under it.
-export function Mosaic({ children }: { children: ReactNode }) {
-  return <div className={styles.mosaic}>{children}</div>;
-}
-
-// One card of the mosaic: its title in the display face, its total at the right. `full` takes a whole row; `lead`
-// takes one only where the mosaic has two columns, so the longest list is never squeezed.
-export function Tile({ title, figure, full, lead, children }: { title: ReactNode; figure?: ReactNode; full?: boolean; lead?: boolean; children: ReactNode }) {
+// A titled part of a screen: its title in the display face, its total at the right. No box, space only.
+export function Section({ title, figure, children }: { title: ReactNode; figure?: ReactNode; children: ReactNode }) {
   return (
-    <section className={join(styles.tile, full && styles.tileFull, lead && styles.tileLead)}>
-      <div className={styles.tileHead}>
-        <h2 className={styles.tileTitle}>{title}</h2>
+    <section className={styles.section}>
+      <div className={styles.sectionHead}>
+        <h2 className={styles.sectionTitle}>{title}</h2>
         {figure === undefined ? null : <Text mono>{figure}</Text>}
       </div>
       {children}
     </section>
+  );
+}
+
+type Step = { href: string; label: string };
+
+function PeriodStep({ step, glyph }: { step?: Step; glyph: string }) {
+  return step === undefined ? <span className={styles.periodSpacer} aria-hidden="true" /> : <Link href={step.href} className={styles.periodStep} aria-label={step.label}>{glyph}</Link>;
+}
+
+// The top line of a day or a week: its name and, under it in muted, what it adds up to, with ‹ and › one period away.
+// Both arrows are buttons with a name; where a period has no neighbour its place stays empty so the title never moves.
+// `children` is the small line under the title («Actualizado hace…», the way back to now).
+export function Period({ title, summary, prev, next, children }: { title: string; summary?: string; prev?: Step; next?: Step; children?: ReactNode }) {
+  return (
+    <header className={styles.period}>
+      <div className={styles.periodRow}>
+        <PeriodStep step={prev} glyph="‹" />
+        <h1 className={styles.periodTitle}>
+          {title}
+          {summary === undefined ? null : <span className={styles.periodSummary}>{` · ${summary}`}</span>}
+        </h1>
+        <PeriodStep step={next} glyph="›" />
+      </div>
+      {children === undefined ? null : <div className={styles.periodMeta}>{children}</div>}
+    </header>
   );
 }
 
@@ -48,7 +62,7 @@ export function Between({ children }: { children: ReactNode }) {
   return <div className={styles.between}>{children}</div>;
 }
 
-export type Tone = "code" | "ai" | "work" | "messages" | "games" | "social" | "shopping" | "system" | "other" | "claude" | "claudeWeb" | "claudeApp";
+export type Tone = "code" | "ai" | "work" | "messages" | "games" | "social" | "shopping" | "study" | "system" | "other" | "claude" | "claudeWeb" | "claudeApp";
 
 type MeterSize = "large" | "default" | "compact";
 
@@ -66,7 +80,8 @@ export function Meter({ name, figure, share, label, size = "default", tone, wrap
   );
 }
 
-// A row that opens onto its detail: the native <details>, so it works without a script and by keyboard.
+// A row that opens onto its detail: the native <details>, so it works without a script and by keyboard. The › sits at
+// the row's start, centred on the row, in a 24-wide hit area.
 export function Disclosure({ summary, children }: { summary: ReactNode; children: ReactNode }) {
   return (
     <details className={styles.disclosure}>
@@ -79,67 +94,28 @@ export function Disclosure({ summary, children }: { summary: ReactNode; children
   );
 }
 
-// The brand block: the one dark block on the main screen.
-export function Hero({ children }: { children: ReactNode }) {
-  return <section className={styles.hero}>{children}</section>;
+// Keeps a row with no detail in line with its neighbours that open: the width of a ›.
+export function Gutter({ children }: { children: ReactNode }) {
+  return <div className={styles.gutter}>{children}</div>;
 }
 
-// The block's parts side by side where they fit, stacked where they do not.
-export function HeroColumns({ children }: { children: ReactNode }) {
-  return <div className={styles.heroColumns}>{children}</div>;
-}
-
-export function Title({ small, children }: { small?: boolean; children: ReactNode }) {
-  return <h1 className={join(styles.title, small && styles.titleSmall)}>{children}</h1>;
-}
-
-// A time set big: its figures large, its units small. `mark` sets it on a cyan tint with a cyan edge.
-export function Figure({ parts, mark }: { parts: { value: string; unit: string }[]; mark?: boolean }) {
-  return (
-    <p className={join(styles.figure, mark && styles.mark)}>
-      {parts.map((part) => (
-        <span key={part.unit}>
-          {part.value}
-          <span className={styles.unit}> {part.unit}</span>
-        </span>
-      ))}
-    </p>
-  );
+export function Title({ children }: { children: ReactNode }) {
+  return <h1 className={styles.title}>{children}</h1>;
 }
 
 type TextVariant = "total" | "row" | "meta";
 
 // `wrap` lets a long text take two lines before it is cut. `untitled` leaves the title to a parent that already has one.
-export function Text({ variant = "row", mono, mark, truncate, wrap, untitled, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; wrap?: boolean; untitled?: boolean; as?: "span" | "p"; children: ReactNode }) {
+export function Text({ variant = "row", mono, truncate, wrap, untitled, as = "span", children }: { variant?: TextVariant; mono?: boolean; truncate?: boolean; wrap?: boolean; untitled?: boolean; as?: "span" | "p"; children: ReactNode }) {
   const Tag = as;
   // A cut text carries its whole self as a hover and long-press title.
   const title = !untitled && (truncate || wrap) && typeof children === "string" ? children : undefined;
-  return <Tag title={title} className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate, wrap && styles.clamp)}>{children}</Tag>;
-}
-
-// Inside the brand block: a small label over a value.
-export function Cards({ children }: { children: ReactNode }) {
-  return <div className={styles.cards}>{children}</div>;
-}
-
-export function Card({ label, children }: { label: ReactNode; children: ReactNode }) {
-  return (
-    <div className={styles.card}>
-      <Text variant="meta">{label}</Text>
-      {children}
-    </div>
-  );
-}
-
-// «13 h» as «13» over «h», so two neighbours never read as one run of figures.
-function FigureParts({ text }: { text: string }) {
-  const at = text.indexOf(" ");
-  return at < 0 ? text : <><span>{text.slice(0, at)}</span><span className={styles.dayUnit}>{text.slice(at + 1)}</span></>;
+  return <Tag title={title} className={join(styles[variant], mono && styles.mono, !mono && styles.name, truncate && styles.truncate, wrap && styles.clamp)}>{children}</Tag>;
 }
 
 export type CompositionPart = { key: string; tone: Tone; seconds: number; name: string; figure: string };
 
-// A whole in parts on the brand block: one stacked bar and, under it, each part's name and figure in words, so no
+// A whole in parts: one stacked bar and, under it, each part's name and figure in words, so no
 // part is told by colour alone.
 export function Composition({ parts, label }: { parts: CompositionPart[]; label: string }) {
   const total = Math.max(1, parts.reduce((sum, part) => sum + part.seconds, 0));
@@ -154,7 +130,7 @@ export function Composition({ parts, label }: { parts: CompositionPart[]; label:
         {parts.map((part) => (
           <li key={part.key} className={styles[`tone_${part.tone}`]}>
             <span className={styles.swatch} aria-hidden="true" />
-            <Text truncate>{part.name}</Text>
+            <Text>{part.name}</Text>
             <Text mono>{part.figure}</Text>
           </li>
         ))}
@@ -163,127 +139,25 @@ export function Composition({ parts, label }: { parts: CompositionPart[]; label:
   );
 }
 
-// The tones a grid uses, each with its name: the legend of a colour that is also written in the rows.
-export function ToneLegend({ items }: { items: { key: string; tone: Tone; name: string }[] }) {
+export type DayRow = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href: string };
+
+// The seven days of a week as rows, each a link to its day with its full figure and a bar against the week's longest day.
+// A day not reached is dimmed, reads «—» and opens nothing.
+export function DayRows({ days }: { days: DayRow[] }) {
   return (
-    <ul className={styles.toneLegend}>
-      {items.map((item) => (
-        <li key={item.key} className={styles[`tone_${item.tone}`]}>
-          <span className={styles.swatchGround} aria-hidden="true" />
-          <Text>{item.name}</Text>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export type HeatmapColumn = { key: string; label: string; href?: string; future?: boolean };
-// `kind` is the class written under the name, so a colour is never the only word for it.
-export type HeatmapRow = { key: string; name: string; kind: string; tone: Tone; total: string; cells: { figure: { wide: string; narrow: string } | null; level: number; label: string }[] };
-
-// A grid of rows by days, a cell tinted by its level and always carrying its figure (a level only helps the eye find it).
-export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; rows: HeatmapRow[]; label: string }) {
-  return (
-    <table className={styles.heat} aria-label={label}>
-      <thead>
-        <tr>
-          <th scope="col" className={styles.heatName} />
-          {columns.map((column) => (
-            <th key={column.key} scope="col" className={join(styles.heatHead, column.future && styles.dayFuture)}>
-              {column.href === undefined || column.future ? column.label : <Link href={column.href} className={styles.heatLink}>{column.label}</Link>}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.key} className={styles[`tone_${row.tone}`]}>
-            <th scope="row" className={styles.heatName} title={`${row.name} · ${row.kind}: ${row.total}`}>
-              <Text truncate untitled>{row.name}</Text>
-              <Text variant="meta" truncate untitled>{row.kind}</Text>
-            </th>
-            {row.cells.map((cell, index) => (
-              <td key={columns[index].key} className={join(styles.heatCell, styles.mono)} data-level={cell.level} aria-label={cell.label}>
-                {cell.figure === null ? <span className={styles.heatNone}>—</span> : <><span className={styles.heatWide}>{cell.figure.wide}</span><span className={styles.heatNarrow}>{cell.figure.narrow}</span></>}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-// `empty` is a day reached with no upload: it reads as a dashed tile and its number is struck by a dash, never colour alone.
-export type StripEntry = { key: string; initial: string; number: number; description: string; href?: string; current: boolean; empty?: boolean };
-
-// The days of one week as touchable tiles, the month named above them, ‹ › one day away and « » one week away.
-type StripStep = { href: string; label: string };
-
-function StripArrow({ step, glyph }: { step?: StripStep; glyph: string }) {
-  return step === undefined ? <span className={styles.stripStep} /> : <Link href={step.href} className={styles.stripStep} aria-label={step.label}>{glyph}</Link>;
-}
-
-export function DayStrip({ label, days, weekPrev, dayPrev, dayNext, weekNext }: { label: string; days: StripEntry[]; weekPrev?: StripStep; dayPrev?: StripStep; dayNext?: StripStep; weekNext?: StripStep }) {
-  return (
-    <nav className={styles.strip} aria-label={label}>
-      <div className={styles.stripHead}>
-        <StripArrow step={weekPrev} glyph="«" />
-        <StripArrow step={dayPrev} glyph="‹" />
-        <span className={styles.stripLabel}>{label}</span>
-        <StripArrow step={dayNext} glyph="›" />
-        <StripArrow step={weekNext} glyph="»" />
-      </div>
-      <div className={styles.stripDays}>
-        {days.map((one) => {
-          const inside = (
-            <>
-              <span className={styles.stripInitial}>{one.initial}</span>
-              <span className={styles.mono}>{one.number}</span>
-              {one.empty ? <span className={styles.stripNone} aria-hidden="true">—</span> : null}
-            </>
-          );
-          return one.href === undefined ? (
-            <span key={one.key} className={join(styles.stripDay, styles.stripOff)} aria-hidden="true">{inside}</span>
-          ) : (
-            <Link key={one.key} href={one.href} className={join(styles.stripDay, one.current && styles.stripCurrent, one.empty && styles.stripEmpty)} aria-label={one.description} aria-current={one.current ? "date" : undefined}>{inside}</Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
-export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href?: string };
-
-// Seven vertical columns, one per day, for the brand block; a day not reached is dimmed and empty.
-export function DayColumns({ days }: { days: DayColumn[] }) {
-  return (
-    <div className={styles.days}>
-      {days.map((day) => {
-        const column = (
-          <>
-            <div className={styles.dayTrack} role="img" aria-label={day.description}>
-              <div className={styles.dayFill} style={{ height: day.share > 0 ? `max(4px, ${Math.min(1, day.share) * 100}%)` : "0" }} />
-            </div>
-            <span className={join(styles.dayFigure, styles.mono)}>
-              {day.future ? "" : <FigureParts text={day.figure} />}
-            </span>
-            <span className={styles.dayLabel}>{day.label}</span>
-          </>
-        );
-        // A day reached opens on its own screen; one not reached stays a plain column.
-        return day.href === undefined || day.future ? (
-          <div key={day.key} className={join(styles.day, day.future && styles.dayFuture)}>
-            {column}
+    <Rows>
+      {days.map((day) =>
+        day.future ? (
+          <div key={day.key} className={styles.rowDim}>
+            <Meter name={day.label} figure="—" share={0} label={day.description} />
           </div>
         ) : (
-          <Link key={day.key} href={day.href} className={join(styles.day, styles.dayLink)}>
-            {column}
+          <Link key={day.key} href={day.href} className={styles.rowLink}>
+            <Meter name={day.label} figure={day.figure} share={day.share} label={day.description} />
           </Link>
-        );
-      })}
-    </div>
+        ),
+      )}
+    </Rows>
   );
 }
 
@@ -354,8 +228,9 @@ export function Form(props: ComponentProps<"form">) {
   return <form {...props} className={styles.form} />;
 }
 
-export function CodeBlock({ children }: { children: ReactNode }) {
-  return <div className={styles.codeBlock}>{children}</div>;
+// `row` puts the text and its copy button on one line.
+export function CodeBlock({ row, children }: { row?: boolean; children: ReactNode }) {
+  return <div className={row ? styles.codeRow : styles.codeBlock}>{children}</div>;
 }
 
 export function Code({ children }: { children: ReactNode }) {

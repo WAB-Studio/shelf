@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { claudeScreen, claudeSources, claudeTotal, claudeWeekHint, dailyRows, toCsv } from "./daily";
+import { claudeScreen, claudeTotal, dailyRows, toCsv } from "./daily";
 
 const totals = [
   { day: "2026-10-27", seconds: 20_000 },
@@ -54,18 +54,4 @@ test("the CSV quotes what needs it and defuses a formula in an app's name", () =
   assert.equal(lines[2], "2026-10-29,3600,0,0,0,0,0,'=HYPERLINK(1),3600,1");
   assert.equal(lines[3], "");
   assert.equal(toCsv([{ ...dailyRows("2026-10-28", "2026-10-28", [], [], [], "S", "2026-10-31", new Set())[0], top_app: 'a, "b"' }]).split("\r\n")[1], '2026-10-28,0,0,0,0,0,0,"a, ""b""",0,0');
-});
-
-test("Claude's sources keep their order", () => {
-  const names = { code: "Claude Code", web: "claude.ai", desktop: "App" };
-  const sources = claudeSources({ code: 600, web: 0, desktop: 0 }, names);
-  assert.deepEqual(sources.map((one) => one.key), ["code", "web", "desktop"]);
-  assert.deepEqual(claudeSources(undefined, names).map((one) => one.seconds), [0, 0, 0]);
-});
-
-test("a week with no Claude time points to «Llaves» before the first upload, and to Hoy after it", () => {
-  assert.equal(claudeWeekHint({ lastReceived: null, hasSites: false, hasClaudeCode: false }), "connect");
-  assert.equal(claudeWeekHint({ lastReceived: new Date(), hasSites: false, hasClaudeCode: false }), "never");
-  assert.equal(claudeWeekHint({ lastReceived: new Date(), hasSites: true, hasClaudeCode: false }), "none");
-  assert.equal(claudeWeekHint({ lastReceived: new Date(), hasSites: false, hasClaudeCode: true }), "none");
 });

@@ -1,10 +1,10 @@
 import { BROWSER_NAMES } from "@/lib/app-names";
-import type { AppTime, SiteTime } from "@/lib/queries";
+import type { AppTime, PageTime, SiteTime } from "@/lib/queries";
 
-// What an app or a site is for (RT-28). Classes describe where the time went; none of them is better than another.
-export type AppClass = "code" | "ai" | "work" | "messages" | "games" | "social" | "shopping" | "system" | "other";
+// What an app or a site is for (RT-32). Classes describe where the time went; none of them is better than another.
+export type AppClass = "code" | "ai" | "work" | "messages" | "games" | "social" | "shopping" | "study" | "system" | "other";
 
-export const APP_CLASSES: AppClass[] = ["code", "ai", "work", "messages", "games", "social", "shopping", "system", "other"];
+export const APP_CLASSES: AppClass[] = ["code", "ai", "work", "messages", "games", "social", "shopping", "study", "system", "other"];
 
 const CLAUDE_APP = "Claude";
 
@@ -28,7 +28,7 @@ const CLASS_OF: Record<string, AppClass> = {
   WhatsApp: "messages",
   Discord: "messages",
   Telegram: "messages",
-  VALORANT: "games",
+  Valorant: "games",
   Fortnite: "games",
   "Rocket League": "games",
   Minecraft: "games",
@@ -39,6 +39,7 @@ const CLASS_OF: Record<string, AppClass> = {
   Spotify: "social",
   VLC: "social",
   "MPC-HC": "social",
+  Anki: "study",
   Explorer: "system",
 };
 
@@ -58,6 +59,13 @@ const DOMAINS: Record<string, AppClass> = {
   "supabase.com": "code",
   "vercel.com": "code",
   "vercel.app": "code",
+  "wordbookapp.vercel.app": "study",
+  "duolingo.com": "study",
+  "ankiweb.net": "study",
+  "coursera.org": "study",
+  "udemy.com": "study",
+  "platzi.com": "study",
+  "khanacademy.org": "study",
   "console.cloud.google.com": "code",
   "huggingface.co": "code",
   "fal.ai": "code",
@@ -119,11 +127,45 @@ export function appTone(name: string, systemName: string, browserKind: AppClass 
   return BROWSER_NAMES.has(name) ? browserKind : appClass(name, systemName);
 }
 
-// The browser's seconds by class: each site's seconds under its class. Sites that outrun the browser (two devices,
-// overlap) are scaled down to it; browser time no site accounts for is «other».
-function browserByClass(browserSeconds: number, sites: SiteTime[]): Map<AppClass, number> {
+// A page whose title names studyAid, «… · studyAid» or just «studyAid», is study whatever its host (RT-32).
+const STUDY_TITLE = /(^|·)\s*studyaid\s*$/i;
+
+// The class of one page: study when its title names studyAid, else its host's.
+export function pageClass(host: string, title: string): AppClass {
+  return STUDY_TITLE.test(title.trim()) ? "study" : siteClass(host);
+}
+
+// The seconds of the day's sites by class. A host with pages splits by them: each page's seconds under its class (pages
+// beyond the host's seconds are scaled down to it), the rest of the host under the host's class. A host with no pages,
+// as on a screen that reads sites alone, keeps the host's class.
+function sitesByClass(sites: SiteTime[], pages: Pick<PageTime, "host" | "title" | "seconds">[]): Map<AppClass, number> {
   const perClass = new Map<AppClass, number>();
-  for (const one of sites) perClass.set(siteClass(one.host), (perClass.get(siteClass(one.host)) ?? 0) + one.seconds);
+  const add = (kind: AppClass, more: number) => perClass.set(kind, (perClass.get(kind) ?? 0) + more);
+  const hostPages = new Map<string, Map<AppClass, number>>();
+  for (const page of pages) {
+    const host = page.host.trim().toLowerCase();
+    const mine = hostPages.get(host) ?? new Map<AppClass, number>();
+    const kind = pageClass(host, page.title);
+    mine.set(kind, (mine.get(kind) ?? 0) + page.seconds);
+    hostPages.set(host, mine);
+  }
+  const hosts = new Map<string, number>();
+  for (const one of sites) hosts.set(one.host.trim().toLowerCase(), (hosts.get(one.host.trim().toLowerCase()) ?? 0) + one.seconds);
+  for (const [host, seconds] of hosts) {
+    const mine = hostPages.get(host);
+    // Only study pages differ from their host's class; every other page is part of the host's rest.
+    const kind = siteClass(host);
+    const study = kind === "study" ? 0 : Math.min(seconds, mine?.get("study") ?? 0);
+    if (study > 0) add("study", study);
+    add(kind, seconds - study);
+  }
+  return perClass;
+}
+
+// The browser's seconds by class: each site's seconds under its class (study pages carved out of their host). Sites that
+// outrun the browser (two devices, overlap) are scaled down to it; browser time no site accounts for is «other».
+function browserByClass(browserSeconds: number, sites: SiteTime[], pages: Pick<PageTime, "host" | "title" | "seconds">[] = []): Map<AppClass, number> {
+  const perClass = sitesByClass(sites, pages);
   const sitesSeconds = [...perClass.values()].reduce((sum, seconds) => sum + seconds, 0);
   if (sitesSeconds > browserSeconds) {
     const scaled = new Map<AppClass, number>();
@@ -137,14 +179,14 @@ function browserByClass(browserSeconds: number, sites: SiteTime[]): Map<AppClass
 }
 
 // The main class of a set of sites, the one with most seconds; «other» when there are none.
-export function mainSiteClass(sites: SiteTime[]): AppClass {
-  const perClass = browserByClass(Number.MAX_SAFE_INTEGER, sites);
+export function mainSiteClass(sites: SiteTime[], pages: Pick<PageTime, "host" | "title" | "seconds">[] = []): AppClass {
+  const perClass = browserByClass(Number.MAX_SAFE_INTEGER, sites, pages);
   perClass.delete("other");
   return [...perClass].sort((a, b) => b[1] - a[1] || APP_CLASSES.indexOf(a[0]) - APP_CLASSES.indexOf(b[0]))[0]?.[0] ?? "other";
 }
 
-// The day's time by class, longest first; a class with nothing is absent. Browsers are split over the day's sites.
-export function timeByClass(apps: AppTime[], sites: SiteTime[], systemName: string): { kind: AppClass; seconds: number }[] {
+// The day's time by class, longest first; a class with nothing is absent. Browsers are split over the day's sites and pages.
+export function timeByClass(apps: AppTime[], sites: SiteTime[], systemName: string, pages: Pick<PageTime, "host" | "title" | "seconds">[] = []): { kind: AppClass; seconds: number }[] {
   const seconds = new Map<AppClass, number>();
   const add = (kind: AppClass, more: number) => seconds.set(kind, (seconds.get(kind) ?? 0) + more);
   let browser = 0;
@@ -152,7 +194,7 @@ export function timeByClass(apps: AppTime[], sites: SiteTime[], systemName: stri
     if (BROWSER_NAMES.has(one.app)) browser += one.seconds;
     else add(appClass(one.app, systemName), one.seconds);
   }
-  if (browser > 0) for (const [kind, more] of browserByClass(browser, sites)) add(kind, more);
+  if (browser > 0) for (const [kind, more] of browserByClass(browser, sites, pages)) add(kind, more);
   return [...seconds]
     .map(([kind, total]) => ({ kind, seconds: total }))
     .filter((one) => one.seconds > 0)
