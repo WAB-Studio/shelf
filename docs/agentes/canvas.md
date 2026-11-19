@@ -27,7 +27,6 @@ The main session reads this before a screen is dispatched. The why: `docs/agente
 - `apps/homefund` (HomeFund): «HomeFund», https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj (created 2026-10-14).
 - `apps/wordbook` (WordBook): «Diccionario de lectura», https://claude.ai/artifact/K9acY69gRz13JPtAn7GWwz (the old
   `claude.ai/code/artifact/92f7…` link opens the same canvas).
-- `apps/goallog` (GoalLog): «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
 - `apps/portal`: «Shelf», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
 - The roadmap, «Hoja de ruta de Shelf»: https://claude.ai/artifact/BvxPYpkcqSDerHBXrNhUwF. Questions to the user go in its
   «Te toca a ti», never the terminal; read the answers from its db collection `respuestas`.

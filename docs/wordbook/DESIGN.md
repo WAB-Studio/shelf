@@ -1759,7 +1759,7 @@ Canvas version 48. Every board draws the dark 360 face; `RegistroBorrarFila` add
   600, the form's existing failure shape.
 - **`CuentaEnlaceOtroNavegador`:** `?error=linkOtherBrowser`, the notice of `CuentaEnlaceNoVerificado` and
   `CuentaEnlaceInvalido`: «Abre el enlace en el navegador donde lo pediste» / «Por seguridad el enlace solo entra en el
-  navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.» (GoalLog's words). The form below is the retry.
+  navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.». The form below is the retry.
 - **`CuentaEnlaceNoVerificado` and `CuentaEnlaceInvalido` are stale:** drawn before «Tu cuenta» and the Copia section.
   The user asked for both redrawn so the three match.
 

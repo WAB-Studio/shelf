@@ -6,7 +6,6 @@ Tres apps personales en un solo repositorio, y la página que las reúne.
 |---|---|---|---|
 | **HomeFund** | `apps/homefund` | Un fondo compartido: cuentas, movimientos, deudas, presupuestos y recurrentes de un hogar, con los saldos derivados de los movimientos. | `docs/SPEC.md`, `docs/FLOWS.md`, `docs/DESIGN.md` |
 | **WordBook** | `apps/wordbook` | Un diccionario inglés–español que se instala en el teléfono, funciona sin conexión y recuerda lo que buscaste para exportarlo a Anki. | `docs/wordbook/SPEC.md`, `docs/wordbook/DESIGN.md` |
-| **GoalLog** | `apps/goallog` | Metas que se ganan en semanas: el plan dice qué cuenta, los hechos del día dicen qué pasó. Se conecta a otros asistentes por MCP. | `docs/goallog/SPEC.md`, `docs/goallog/DESIGN.md` |
 | **Shelf** | `apps/portal` | Una página estática, sin build, con el enlace a cada app. En línea en https://shelfhome.vercel.app. | `docs/portal/DESIGN.md` |
 
 Cada `SPEC.md` es el contrato: lo que no está en su §1 no se construye. Cada requisito tiene un código (`RF-…`, `RNF-…`)
@@ -34,7 +33,7 @@ cd apps/homefund
 PORT=3000 ../../scripts/supabase-local.sh exec npm run dev
 ```
 
-WordBook corre en :3100 y GoalLog en :3200, con el mismo `scripts/supabase-local.sh exec npm run dev` desde su carpeta.
+WordBook corre en :3100, con el mismo `scripts/supabase-local.sh exec npm run dev` desde su carpeta.
 Sin el envoltorio, la app lee el proyecto remoto.
 
 ## Verificar
@@ -45,7 +44,7 @@ npm run lint           # eslint con caché
 ```
 
 Cada app trae sus propios `check:*`: `check:unit`, `check:queries`, `db:check-rls` y `check:e2e` en HomeFund;
-`check:sync`, `check:grants` y `check:e2e` en WordBook; `check:policies`, `check:mcp` y `check:e2e` en GoalLog. Todos
+`check:sync`, `check:grants` y `check:e2e` en WordBook. Todos
 corren dentro de `scripts/supabase-local.sh exec`. Ninguna prueba llama a un modelo de pago. La suite e2e completa
 corre en CI (`.github/workflows/ci.yml`), no en local.
 
@@ -60,7 +59,7 @@ El resto está en `AGENTS.md` y en `docs/TRAPS.md`.
 ## Ramas y despliegue
 
 Se trabaja en ramas que entran por PR a `integracion`. `main` es lo que Vercel despliega, y solo recibe `integracion`.
-Las apps se despliegan como los proyectos `homefund`, `wordbook` y `goallog`. Shelf se despliega a mano desde
+Las apps se despliegan como los proyectos `homefund`, `wordbook` y `timelog`. Shelf se despliega a mano desde
 `apps/portal` con `npx vercel deploy --prod --yes`.
 
 ## Cómo se desarrolla

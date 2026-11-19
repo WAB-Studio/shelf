@@ -19,7 +19,6 @@ set -euo pipefail
 APPS=(
   "homefund 3000       yes         yes                 HARNESS_BASE_URL"
   "wordbook 3100       yes         no                  VOYAGER_BASE_URL"
-  "goallog  3200       yes         no                  PULSAR_BASE_URL"
 )
 
 if [[ ${CLAUDE_CODE_REMOTE:-} == true ]]; then

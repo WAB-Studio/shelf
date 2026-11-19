@@ -15,7 +15,7 @@ An assignment: goal, files, contract, RF or RL codes covered, done criterion, br
 
 A test agrees with the implementation when it is written from the implementation. Write it from
 what the app owes the person using it: `docs/SPEC.md` §1 and §2, `docs/wordbook/SPEC.md` for the
-reading app, `docs/goallog/SPEC.md` for the goals app, the plan's done criterion, the Zod schema, the database schema.
+reading app, the plan's done criterion, the Zod schema, the database schema.
 
 # Order
 

@@ -40,7 +40,7 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   the keys with their last use, and revokes one.
 - [x] **RT-07** The MCP server answers with the same key: a day's apps, a week's days and apps, and a
   range of days' totals. It writes nothing. (P5, 3a)
-- [x] **RT-08** A person signs in by email, the way GoalLog does. Only an allowed address may.
+- [x] **RT-08** A person signs in by email. Only an allowed address may.
 - [x] **RT-09** The uploader is `timelog-sync`, adapted from `aw-client`: `aw-client timelog --url
   <TimeLog> --key <key> [--days N]` sends the last N days (default 2) and can run on a schedule.
 - [x] **RT-10** ActivityWatch + TimeLog, our fork of ActivityWatch's Windows installer, bundles

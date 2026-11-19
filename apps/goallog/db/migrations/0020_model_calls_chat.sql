@@ -1,2 +1,0 @@
-ALTER TABLE "goals"."model_calls" DROP CONSTRAINT "model_calls_source_known";--> statement-breakpoint
-ALTER TABLE "goals"."model_calls" ADD CONSTRAINT "model_calls_source_known" CHECK ("goals"."model_calls"."source" in ('paste', 'file', 'chat'));

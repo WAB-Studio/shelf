@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # The main checkout: a lane has no .env.local or private key of its own.
 MAIN="$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")"
 
-# Schemas of the four apps (HomeFund finances, GoalLog goals, WordBook reading, TimeLog timelog), the test harness and
+# Schemas of the apps (HomeFund finances, WordBook reading, TimeLog timelog), GoalLog's retired `goals` (production keeps it; no migration drops it), the test harness and
 # the drizzle migration history and `private`, whose functions our triggers and policies call. public holds nothing of ours; auth, storage, vault and cron are Supabase's.
 BACKUP_SCHEMAS=(finances goals reading timelog harness drizzle private)
 # The users and their sign-in identities: every foreign key of ours ends in auth.users. Rows only; Supabase owns the table.
