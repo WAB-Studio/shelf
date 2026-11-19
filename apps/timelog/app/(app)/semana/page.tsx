@@ -53,6 +53,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const longestDay = Math.max(1, ...minutes);
   const weekApps = appsOfWeek(byDay, days.map((one) => one.day), words.system);
   const apps = weekApps.map((one) => ({ app: one.app, seconds: one.total }));
+  const appsTotal = sum(apps);
   const browserKind = mainSiteClass(sites, pages);
   const classes = timeByClass(apps, sites, words.system, pages);
   const projects = projectsOf(windows);
@@ -104,18 +105,20 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
             days={days.map(({ day }, index) => ({
               key: day,
               label: dayName(day),
-              figure: words.duration(minutes[index] * 60),
-              share: minutes[index] / longestDay,
+              figure: day > today ? "—" : words.duration(minutes[index] * 60),
+              share: day > today ? 0 : minutes[index] / longestDay,
               future: day > today,
               href: day === today ? "/" : `/dia/${day}`,
               description: day > today ? t("upcoming", { day: dayName(day) }) : t("bar", { day: dayName(day), duration: words.duration(minutes[index] * 60) }),
             }))}
           />
-          {apps.length === 0 ? <Text as="p">{t("empty")}</Text> : <Composition label={tToday("byClassLabel")} parts={classes.map((one) => ({ key: one.kind, tone: one.kind, seconds: one.seconds, name: tClass(one.kind), figure: words.duration(one.seconds) }))} />}
+          {apps.length === 0 ? null : <Composition label={tToday("byClassLabel")} parts={classes.map((one) => ({ key: one.kind, tone: one.kind, seconds: one.seconds, name: tClass(one.kind), figure: words.duration(one.seconds) }))} />}
           <Columns
             main={
-              apps.length === 0 ? null : (
-                <Section title={tToday("apps")} figure={words.duration(sum(apps))}>
+              apps.length === 0 ? (
+                <Text as="p">{t("empty")}</Text>
+              ) : (
+                <Section panel title={tToday("apps")} figure={words.duration(appsTotal)}>
                   <BarRows
                     of={weekApps[0]?.total}
                     rows={weekApps.slice(0, APPS_SHOWN).map(appRow)}
@@ -127,12 +130,12 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
             aside={
               <>
                 {sites.length > 0 ? (
-                  <Section title={tSites("title")} figure={words.duration(sum(sites))}>
+                  <Section panel title={tSites("title")} figure={words.duration(sum(sites))}>
                     <SiteBars sites={sites} words={words} />
                   </Section>
                 ) : null}
                 {projects.length > 0 ? (
-                  <Section title={tToday("projects")} figure={words.duration(sum(projects))}>
+                  <Section panel title={tToday("projects")} figure={words.duration(sum(projects))}>
                     <ProjectBars projects={projects} words={words} />
                   </Section>
                 ) : null}

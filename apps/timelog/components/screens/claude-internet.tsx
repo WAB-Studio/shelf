@@ -29,7 +29,7 @@ export async function ClaudeLine({ screen, agent, sessions, hasClaudeCode, words
   };
   const text = line === null ? null : <Text as="p">{line}</Text>;
   return (
-    <Section title={t("title")}>
+    <Section panel title={t("title")}>
       {text === null ? null : sessions.length === 0 ? (
         text
       ) : (
@@ -77,7 +77,7 @@ export async function SitesBlock({ isToday, sites, pages, hasSites, words }: { i
   };
   const detail = (host: string) => (pages.some((page) => page.host === host) ? pagesOf(host) : undefined);
   return (
-    <Section title={t("title")} figure={sites.length > 0 ? words.duration(sum(sites)) : undefined}>
+    <Section panel title={t("title")} figure={sites.length > 0 ? words.duration(sum(sites)) : undefined}>
       {sites.length > 0 ? (
         <>
           <SiteBars sites={sites} words={words} detail={detail} />

@@ -123,7 +123,7 @@ export async function DayView({ day }: { day: string }) {
         <Columns
           main={
             apps.length > 0 ? (
-              <Section title={t("apps")} figure={words.duration(total)}>
+              <Section panel title={t("apps")} figure={words.duration(total)}>
                 <BarRows
                   of={apps[0]?.seconds}
                   rows={apps.slice(0, APPS_SHOWN).map(appRow)}
@@ -136,7 +136,7 @@ export async function DayView({ day }: { day: string }) {
             <>
               <SitesBlock isToday={isToday} sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
               {projects.length > 0 ? (
-                <Section title={t("projects")} figure={words.duration(sum(projects))}>
+                <Section panel title={t("projects")} figure={words.duration(sum(projects))}>
                   <ProjectBars projects={projects} words={words} />
                 </Section>
               ) : null}

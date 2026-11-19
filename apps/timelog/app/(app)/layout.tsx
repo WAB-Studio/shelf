@@ -9,8 +9,7 @@ import { getPerson } from "@/lib/session";
 export default async function AppLayout({ children }: { children: ReactNode }) {
   if ((await getPerson()) === null) redirect("/entrar");
   return (
-    <Page shell>
-      <AppHeader signedIn />
+    <Page shell header={<AppHeader signedIn sidebar />}>
       {children}
     </Page>
   );

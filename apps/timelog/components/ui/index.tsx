@@ -7,17 +7,22 @@ const join = (...names: (string | false | undefined)[]) => names.filter(Boolean)
 
 // Desktop first (DESIGN «Escritorio»): with `shell`, from 1100 the header is a sidebar and the screen takes the width
 // beside it; under 1100 one column, 760 at most, the header on top. Without `shell`, one column at every width.
-export function Page({ shell, children }: { shell?: boolean; children: ReactNode }) {
-  return <main className={join(styles.page, shell && styles.shell)}>{children}</main>;
+export function Page({ shell, header, children }: { shell?: boolean; header: ReactNode; children: ReactNode }) {
+  return (
+    <main className={join(styles.page, shell && styles.shell)}>
+      {header}
+      <div className={styles.content}>{children}</div>
+    </main>
+  );
 }
 
 // The two columns of a desktop screen: `main` the wide one (the apps), `aside` the narrow one (sites, projects, Claude).
-// Under 1100 they stack, `main` first. A section inside reads as a panel on the desktop.
+// Under 1100 they stack, `main` first.
 export function Columns({ main, aside }: { main: ReactNode; aside: ReactNode }) {
   return (
     <div className={styles.columns}>
-      <div className={styles.column}>{main}</div>
-      <div className={styles.column}>{aside}</div>
+      <Stack gap={4}>{main}</Stack>
+      <Stack gap={4}>{aside}</Stack>
     </div>
   );
 }
@@ -27,10 +32,11 @@ export function Narrow({ children }: { children: ReactNode }) {
   return <div className={styles.narrow}>{children}</div>;
 }
 
-// A titled part of a screen: its title in the display face, its total at the right. No box, space only.
-export function Section({ title, figure, children }: { title: ReactNode; figure?: ReactNode; children: ReactNode }) {
+// A titled part of a screen: its title in the display face, its total at the right. No box, space only; `panel` makes it
+// a raised panel on the desktop, where it stands in a column beside others.
+export function Section({ title, figure, panel, children }: { title: ReactNode; figure?: ReactNode; panel?: boolean; children: ReactNode }) {
   return (
-    <section className={styles.section}>
+    <section className={join(styles.section, panel && styles.panel)}>
       <div className={styles.sectionHead}>
         <h2 className={styles.sectionTitle}>{title}</h2>
         {figure === undefined ? null : <Text mono>{figure}</Text>}
@@ -160,18 +166,16 @@ export function Composition({ parts, label }: { parts: CompositionPart[]; label:
 export type DayRow = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href: string };
 
 // The seven days of a week, each a link to its day with its full figure and a bar against the week's longest day: rows
-// on the phone, seven columns standing side by side on the desktop. A day not reached is dimmed, reads «—» and opens nothing.
+// on the phone, seven columns standing side by side on the desktop. A day not reached is dimmed and opens nothing.
 export function DayRows({ days }: { days: DayRow[] }) {
   return (
-    <ol className={styles.days}>
+    <ol className={join(styles.rows, styles.days)}>
       {days.map((day) => {
         const body = (
           <>
-            <span className={styles.dayTrack} role="img" aria-label={day.description}>
-              <span className={styles.dayFill} style={{ "--share": day.future ? 0 : Math.max(0, Math.min(1, day.share)) } as CSSProperties} />
-            </span>
+            <Bar standing share={day.share} label={day.description} />
             <span className={styles.dayName}>{day.label}</span>
-            <Text mono>{day.future ? "—" : day.figure}</Text>
+            <Text mono>{day.figure}</Text>
           </>
         );
         return (
@@ -184,10 +188,11 @@ export function DayRows({ days }: { days: DayRow[] }) {
   );
 }
 
-// The shared header: the logo mark and name on the left, the sections on the right.
-export function Header({ brand, href, children }: { brand: ReactNode; href: string; children?: ReactNode }) {
+// The shared header: the logo mark and name on the left, the sections on the right; `sidebar` stands it at the left of the
+// screen from 1100, the sections stacked under the name.
+export function Header({ brand, href, sidebar, children }: { brand: ReactNode; href: string; sidebar?: boolean; children?: ReactNode }) {
   return (
-    <header className={styles.header}>
+    <header className={join(styles.header, sidebar && styles.sidebar)}>
       <Link href={href} className={styles.brand}>
         <span className={styles.logo} aria-hidden="true">
           <span />
@@ -201,12 +206,12 @@ export function Header({ brand, href, children }: { brand: ReactNode; href: stri
   );
 }
 
-// One bar, its length a share of the longest (DESIGN: the only graphic).
-export function Bar({ share, label, tone }: { share: number; label: string; tone?: Tone }) {
-  const percent = Math.max(0, Math.min(1, share)) * 100;
+// One bar, its length a share of the longest (DESIGN: the only graphic). `standing` stands it up from 1100.
+export function Bar({ share, label, tone, standing }: { share: number; label: string; tone?: Tone; standing?: boolean }) {
+  const clamped = Math.max(0, Math.min(1, share));
   return (
-    <div className={join(styles.track, tone && styles[`tone_${tone}`])} role="img" aria-label={label}>
-      <div className={styles.fill} style={{ width: `${percent}%` }} />
+    <div className={join(styles.track, tone && styles[`tone_${tone}`], standing && styles.standing)} role="img" aria-label={label}>
+      <div className={styles.fill} style={{ "--share": clamped } as CSSProperties} />
     </div>
   );
 }
@@ -215,9 +220,10 @@ export function TextLink({ current, pill, button, ...props }: ComponentProps<typ
   return <Link {...props} aria-current={current ? "page" : undefined} className={join(styles.link, current && styles.current, pill && styles.pill, button && styles.pillPrimary)} />;
 }
 
-export function Nav({ label, children }: { label: string; children: ReactNode }) {
+// `vertical` stacks the sections from 1100, for a sidebar.
+export function Nav({ label, vertical, children }: { label: string; vertical?: boolean; children: ReactNode }) {
   return (
-    <nav aria-label={label} className={styles.nav}>
+    <nav aria-label={label} className={join(styles.nav, vertical && styles.vertical)}>
       {children}
     </nav>
   );
