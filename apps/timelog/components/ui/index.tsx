@@ -48,7 +48,7 @@ export function Between({ children }: { children: ReactNode }) {
   return <div className={styles.between}>{children}</div>;
 }
 
-export type Tone = "code" | "ai" | "work" | "messages" | "games" | "social" | "shopping" | "system" | "other" | "claude" | "claudeWeb" | "claudeApp";
+export type Tone = "code" | "ai" | "work" | "messages" | "games" | "social" | "shopping" | "study" | "system" | "other" | "claude" | "claudeWeb" | "claudeApp";
 
 type MeterSize = "large" | "default" | "compact";
 
