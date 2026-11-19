@@ -7,10 +7,9 @@ import { useTranslations } from "next-intl";
 import { civilDay } from "@/lib/format/zone";
 import { lookupInstalled } from "@/lib/dictionary/lookup-many";
 import { buildAnkiExport, readAnkiCounts } from "@/lib/log/anki";
-import { LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { buildExport } from "@/lib/log/export";
-import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
-import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
+import { countRecords } from "@/lib/log/record";
+import { onRecordChanged } from "@/lib/log/record-changed";
 import { CLEAR_ASKED_EVENT } from "@/components/log/clear-panel";
 import { Button, Flex, Menu, Separator, Text } from "@/components/ui";
 
@@ -83,17 +82,11 @@ export function DownloadMenu() {
     // reloading the page: `LOG_CLEARED_EVENT` can drop the count to zero,
     // which hides the link (`history-list.tsx` rereads its own list the
     // same way).
-    window.addEventListener(LOG_CLEARED_EVENT, count);
-    window.addEventListener(LOG_FLUSHED_EVENT, count);
     // A delete or a pull changes the rows both files are built from.
-    window.addEventListener(LOG_DELETED_EVENT, count);
-    window.addEventListener(SYNC_LANDED_EVENT, count);
+    const off = onRecordChanged(count);
     return () => {
       cancelled = true;
-      window.removeEventListener(LOG_CLEARED_EVENT, count);
-      window.removeEventListener(LOG_FLUSHED_EVENT, count);
-      window.removeEventListener(LOG_DELETED_EVENT, count);
-      window.removeEventListener(SYNC_LANDED_EVENT, count);
+      off();
     };
   }, []);
 

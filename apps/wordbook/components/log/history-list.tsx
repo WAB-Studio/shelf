@@ -6,15 +6,15 @@ import { MoreHorizontal, X } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { readWordStudy, type StudyRow } from "@/lib/log/summary";
-import { LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, readSyncState } from "@/lib/log/record";
-import { deleteStudyGroup, LOG_DELETED_EVENT } from "@/lib/log/delete";
-import { countKind, isPhraseRow } from "@/lib/log/outcome";
+import { readSyncState } from "@/lib/log/record";
+import { onRecordChanged } from "@/lib/log/record-changed";
+import { deleteStudyGroup } from "@/lib/log/delete";
+import { isPhraseRow } from "@/lib/log/outcome";
 import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
 import { groupByDay, newestRows } from "@/lib/log/diary";
 import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
 import { splitTranslations } from "@/lib/log/translation-line";
-import { readCards } from "@/lib/review/store";
-import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
+import { readCardKeys } from "@/lib/review/store";
 import {
   Box,
   Button,
@@ -56,6 +56,13 @@ type RowActions = {
 };
 
 type Segment = "all" | "learning" | "phrases";
+
+// What each segment of the filter keeps: the counts on its labels and the rows it shows read the same map.
+const SEGMENT_KEEPS: Record<Segment, (row: StudyRow, learning: ReadonlySet<string>) => boolean> = {
+  all: () => true,
+  learning: (row, learning) => learning.has(row.key),
+  phrases: (row) => isPhraseRow(row),
+};
 
 // The rows drawn at first and per «Ver más»: 400 rows at once is a 37,000px page.
 const PAGE_ROWS = 50;
@@ -315,7 +322,7 @@ export function HistoryList() {
       const requestId = ++requestIdRef.current;
       reading = true;
       // The review's cards ride the same round: a store that fails to open leaves every state «—», never the list.
-      Promise.all([readWordStudy(), readCards().catch(() => [])])
+      Promise.all([readWordStudy(), readCardKeys().catch(() => [])])
         .then(([study, cards]) => {
           if (cancelled || requestIdRef.current !== requestId) return;
           // A deleted row keeps «Borrando…» until this reread drops it, so its
@@ -326,7 +333,7 @@ export function HistoryList() {
           setState(
             study.rows.length === 0
               ? { kind: "empty" }
-              : { kind: "ready", rows: study.rows, learning: new Set(cards.map((card) => card.key)), totalWords: study.total },
+              : { kind: "ready", rows: study.rows, learning: new Set(cards), totalWords: study.total },
           );
         })
         .catch(() => {
@@ -361,48 +368,48 @@ export function HistoryList() {
     // `LOG_CLEARED_EVENT` rereads the same way: a wipe empties the store
     // this effect never touches directly, so it needs the same nudge a
     // landed row does to drop back to the empty state.
-    window.addEventListener(LOG_FLUSHED_EVENT, onChange);
-    window.addEventListener(LOG_CLEARED_EVENT, onChange);
-    // A pull that landed rows from another device changes the store the same way.
-    window.addEventListener(SYNC_LANDED_EVENT, onChange);
-    // A row's ✕ deleted its group (`deleteStudyGroup`).
-    window.addEventListener(LOG_DELETED_EVENT, onChange);
+    // A pull from another device and a row's ✕ (`deleteStudyGroup`) change the store the same way.
+    const off = onRecordChanged(onChange);
     return () => {
       cancelled = true;
-      window.removeEventListener(LOG_FLUSHED_EVENT, onChange);
-      window.removeEventListener(LOG_CLEARED_EVENT, onChange);
-      window.removeEventListener(SYNC_LANDED_EVENT, onChange);
-      window.removeEventListener(LOG_DELETED_EVENT, onChange);
+      off();
     };
   }, [attempt]);
 
   const [segment, setSegment] = useState<Segment>("all");
   const readyRows = state.kind === "ready" ? state.rows : null;
   const learningKeys = state.kind === "ready" ? state.learning : null;
-  const counts = useMemo(
-    () => ({
-      all: readyRows?.length ?? 0,
-      learning: readyRows?.filter((row) => learningKeys?.has(row.key)).length ?? 0,
-      phrases: readyRows?.filter(isPhraseRow).length ?? 0,
-    }),
-    [readyRows, learningKeys],
+  const counts = useMemo(() => {
+    const total: Record<Segment, number> = { all: 0, learning: 0, phrases: 0 };
+    if (readyRows === null || learningKeys === null) return total;
+    for (const name of Object.keys(SEGMENT_KEEPS) as Segment[]) {
+      total[name] = readyRows.filter((row) => SEGMENT_KEEPS[name](row, learningKeys)).length;
+    }
+    return total;
+  }, [readyRows, learningKeys]);
+  // The segment narrows the rows once; typing in the filter narrows what is left.
+  const inSegment = useMemo(
+    () => (readyRows === null || learningKeys === null ? [] : readyRows.filter((row) => SEGMENT_KEEPS[segment](row, learningKeys))),
+    [readyRows, learningKeys, segment],
   );
-  const visible = useMemo(() => {
-    if (readyRows === null) return [];
-    const inSegment =
-      segment === "learning"
-        ? readyRows.filter((row) => learningKeys?.has(row.key))
-        : segment === "phrases"
-          ? readyRows.filter(isPhraseRow)
-          : readyRows;
-    return filterStudyRows(inSegment, query);
-  }, [readyRows, learningKeys, segment, query]);
+  const visible = useMemo(() => filterStudyRows(inSegment, query), [inSegment, query]);
 
   const format = useFormatter();
   // The day «today» means is the one the screen opened on.
   const [openedAt] = useState(() => Date.now());
   const timeZone = deviceZone();
-  const days = useMemo(() => groupByDay(newestRows(visible, shownRows), openedAt, timeZone), [visible, shownRows, openedAt, timeZone]);
+  // Each row carries its time, formatted once with the day it sits under.
+  const days = useMemo(
+    () =>
+      groupByDay(newestRows(visible, shownRows), openedAt, timeZone).map((day) => ({
+        ...day,
+        rows: day.rows.map((row) => ({
+          row,
+          time: format.dateTime(row.lastAt, { hour: "2-digit", minute: "2-digit", timeZone }),
+        })),
+      })),
+    [visible, shownRows, openedAt, timeZone, format],
+  );
 
   const remove = useCallback(async (key: string): Promise<void> => {
     if (inFlightRef.current.has(key)) return;
@@ -487,7 +494,7 @@ export function HistoryList() {
   }
 
   const filtering = query.trim() !== "";
-  const kind = countKind(state.rows);
+  const kind = counts.phrases > 0 ? "entries" : "words";
 
   function change(text: string): void {
     setQuery(text);
@@ -589,12 +596,12 @@ export function HistoryList() {
                           })}
                   </MetaLabel>
                 </Table.Day>
-                {day.rows.map((row) => (
+                {day.rows.map(({ row, time }) => (
                   <StudyRowItem
                     key={row.key}
                     row={row}
                     learning={state.learning.has(row.key)}
-                    time={format.dateTime(row.lastAt, { hour: "2-digit", minute: "2-digit", timeZone })}
+                    time={time}
                     phase={target?.key === row.key ? target.phase : undefined}
                     local={target?.key === row.key && target.local}
                     note={target?.key === row.key && target.note}

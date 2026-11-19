@@ -1,18 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { LOG_DELETED_EVENT } from "@/lib/log/delete";
-import { LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
-import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import { cardFront } from "@/lib/log/card";
+import { onRecordChanged } from "@/lib/log/record-changed";
 import { readWordStudy } from "@/lib/log/summary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { answerRanked, answerSenses, pickSense } from "@/lib/review/sense";
 import type { SuggestRow } from "@/components/ui";
 
 // Rows the panel under the field draws: the panel is a list to glance at, not the dictionary's ten.
 const ROWS_SHOWN = 6;
+
+// The gloss a row carries is the lead of the sense the entry itself opens with (RL-91's default sense),
+// so the panel never says a different thing than the answer it opens.
+function leadGloss(answer: WordAnswer): string | null {
+  const sense = pickSense(answerSenses(answer), null, answerRanked(answer));
+  return sense?.translations[0] ?? null;
+}
 
 // Headwords that begin with the string being typed, offered while it is still being treated as a word
 // (RL-18), each with its main translation and a quiet note: a phrase, or a word the reader searched
@@ -24,30 +30,36 @@ export function useSuggestionRows(
   const t = useTranslations("search");
   const shown = items.slice(0, ROWS_SHOWN);
   const key = shown.join("\n");
-  const [glosses, setGlosses] = useState<{ key: string; byWord: Map<string, string> }>({ key: "", byWord: new Map() });
-  const [searched, setSearched] = useState<ReadonlySet<string>>(new Set());
+  // Glosses outlive a keystroke: only a candidate not met before is looked up.
+  const [glosses, setGlosses] = useState<ReadonlyMap<string, string | null>>(new Map());
+  const known = useRef(glosses);
+  useEffect(() => {
+    known.current = glosses;
+  }, [glosses]);
+  const [searched, setSearched] = useState<ReadonlySet<string> | null>(null);
 
   useEffect(() => {
     if (key === "") return;
     let live = true;
+    const fresh = key.split("\n").filter((word) => !known.current.has(word));
+    if (fresh.length === 0) return;
     Promise.all(
-      key.split("\n").map(async (word) => {
-        const answer = await lookup(word).catch(() => null);
-        return [word, answer?.exact?.senses[0]?.translations[0] ?? null] as const;
-      }),
-    ).then((pairs) => {
-      if (!live) return;
-      const byWord = new Map<string, string>();
-      for (const [word, gloss] of pairs) if (gloss !== null) byWord.set(word, gloss);
-      setGlosses({ key, byWord });
-    });
+      fresh.map(async (word) => [word, leadGloss(await lookup(word))] as const),
+    )
+      .then((pairs) => {
+        if (!live) return;
+        setGlosses((current) => new Map([...current, ...pairs]));
+      })
+      .catch(() => {});
     return () => {
       live = false;
     };
   }, [key, lookup]);
 
-  // The words the reader has searched: read once, and again whenever the record changes.
+  // The words the reader has searched: built once the panel has rows, and again whenever the record changes.
+  const wanted = key !== "";
   useEffect(() => {
+    if (!wanted) return;
     let live = true;
     function read(): void {
       readWordStudy()
@@ -57,18 +69,17 @@ export function useSuggestionRows(
         .catch(() => {});
     }
     read();
-    const events = [LOG_DELETED_EVENT, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, SYNC_LANDED_EVENT];
-    for (const name of events) window.addEventListener(name, read);
+    const off = onRecordChanged(read);
     return () => {
       live = false;
-      for (const name of events) window.removeEventListener(name, read);
+      off();
     };
-  }, []);
+  }, [wanted]);
 
   return shown.map((word) => ({
     key: word,
     word,
-    gloss: glosses.key === key ? (glosses.byWord.get(word) ?? null) : null,
-    note: word.includes(" ") ? t("phraseNote") : searched.has(word.toLowerCase()) ? t("searchedBefore") : null,
+    gloss: glosses.get(word) ?? null,
+    note: word.includes(" ") ? t("phraseNote") : searched?.has(word.toLowerCase()) ? t("searchedBefore") : null,
   }));
 }

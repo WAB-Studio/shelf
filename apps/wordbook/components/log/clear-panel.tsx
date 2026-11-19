@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 
 import { countKind } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
-import { clearLocalLookups, countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
-import { LOG_DELETED_EVENT } from "@/lib/log/delete";
-import { SYNC_LANDED_EVENT, SYNC_LOCK } from "@/lib/sync/driver";
+import { clearLocalLookups, countRecords } from "@/lib/log/record";
+import { onRecordChanged } from "@/lib/log/record-changed";
+import { SYNC_LOCK } from "@/lib/sync/driver";
 import { clearAccountLookups } from "@/lib/sync/clear";
 import { Button, Flex, Link, Separator, TapTarget, Text } from "@/components/ui";
 
@@ -105,20 +105,19 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
       read();
     }
 
-    read();
-    const asked = () => setStage((current) => (current.kind === "idle" ? { kind: "confirming" } : current));
+    // Nothing is counted until the question is asked; from then on the figures follow the record.
+    let stopWatching: (() => void) | null = null;
+    const asked = () => {
+      setStage((current) => (current.kind === "idle" ? { kind: "confirming" } : current));
+      if (stopWatching !== null) return;
+      read();
+      stopWatching = onRecordChanged(onChange);
+    };
     window.addEventListener(CLEAR_ASKED_EVENT, asked);
-    window.addEventListener(LOG_FLUSHED_EVENT, onChange);
-    window.addEventListener(LOG_CLEARED_EVENT, onChange);
-    window.addEventListener(LOG_DELETED_EVENT, onChange);
-    window.addEventListener(SYNC_LANDED_EVENT, onChange);
     return () => {
       cancelled = true;
       window.removeEventListener(CLEAR_ASKED_EVENT, asked);
-      window.removeEventListener(LOG_FLUSHED_EVENT, onChange);
-      window.removeEventListener(LOG_CLEARED_EVENT, onChange);
-      window.removeEventListener(LOG_DELETED_EVENT, onChange);
-      window.removeEventListener(SYNC_LANDED_EVENT, onChange);
+      stopWatching?.();
     };
   }, []);
 

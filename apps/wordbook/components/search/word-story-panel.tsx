@@ -5,10 +5,8 @@ import NextLink from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
-import { LOG_DELETED_EVENT } from "@/lib/log/delete";
-import { LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
+import { onRecordChanged } from "@/lib/log/record-changed";
 import { readWordStory, type WordStory } from "@/lib/log/story";
-import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import { dueWhen } from "@/lib/review/schedule";
 import { readCards } from "@/lib/review/store";
 import { Flex, Link, MarkedWord, MetaLabel, Separator, TapTarget, Text } from "@/components/ui";
@@ -47,11 +45,10 @@ export function WordStoryPanel({ headword }: { headword: string }) {
     read();
     // The lookup that opened this answer lands in the record a moment later; a delete, a wipe or a pull
     // from another device changes it the same way.
-    const events = [LOG_FLUSHED_EVENT, LOG_DELETED_EVENT, LOG_CLEARED_EVENT, SYNC_LANDED_EVENT];
-    for (const name of events) window.addEventListener(name, read);
+    const off = onRecordChanged(read);
     return () => {
       live = false;
-      for (const name of events) window.removeEventListener(name, read);
+      off();
     };
   }, [headword]);
 
