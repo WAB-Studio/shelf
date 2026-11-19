@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 
-import { confirmCopy, expect, test } from "./fixtures";
+import { askToClear, confirmCopy, expect, test } from "./fixtures";
 import postgres from "postgres";
 
 import messages from "../messages/es.json";
@@ -66,14 +66,14 @@ test("the app opens with no connection, from its own cache, never the browser's"
   await context.setOffline(true);
   await page.reload();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await expect(searchBox).toBeVisible();
 
   // RL-16: the box, not a network error page — Chromium's own offline page
   // never carries this input — and an answer, not an eternal install message.
   await expect(searchBox).toBeEditable();
   await searchBox.fill("apple");
-  await expect(page.getByText("manzana, poma", { exact: true })).toBeVisible();
+  await expect(page.getByText("manzana · poma", { exact: true })).toBeVisible();
   await expect(page.getByText(messages.install.failed, { exact: true })).toHaveCount(0);
 
   // The 8.2 MB payload has its own store; the shell's cache must never hold
@@ -129,7 +129,7 @@ test("a hard load of /registro/zzqqxv does not overwrite the cached / shell", as
   // Offline "/": the search box, not the word page the last hard load left
   // in the browser's history.
   await page.goto("/");
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await expect(searchBox).toBeVisible();
   await expect(searchBox).toBeEditable();
 
@@ -239,7 +239,7 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
 
     // A row this device recorded itself, so `ClearPanel`'s own count gate
     // has something to show once the confirm panel opens.
-    const searchBox = page.getByRole("textbox", { name: messages.search.label });
+    const searchBox = page.getByRole("combobox", { name: messages.search.label });
     await searchBox.fill("apple");
     // The row is recorded once the answer paints; clearing first records nothing.
     await expect(page.getByRole("heading", { name: "apple", exact: true })).toBeVisible();
@@ -271,7 +271,7 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     // Online, signed in: this is the render that must never overwrite the
     // cache — wait for the worker to settle the navigation before reading it.
     await page.goto("/registro");
-    await expect(page.getByRole("button", { name: messages.log.clear.trigger })).toBeVisible();
+    await expect(page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true })).toBeVisible();
     await expect.poll(() => isCached(page, "/registro")).toBe(true);
 
     // The session gone, same as a sign-out or an expired cookie — the local
@@ -281,7 +281,7 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     await context.setOffline(true);
     await page.goto("/registro");
 
-    await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+    await askToClear(page);
     await expect(page.getByRole("button", { name: messages.log.clear.accountAction })).toHaveCount(0);
   } finally {
     await context.setOffline(false);
@@ -362,7 +362,7 @@ for (const [first, second] of [
     await page.waitForLoadState("load");
     expect(unanswered).toEqual([]);
 
-    const searchBox = page.getByRole("textbox", { name: messages.search.label });
+    const searchBox = page.getByRole("combobox", { name: messages.search.label });
     await expect(searchBox).toBeVisible();
     await expect(searchBox).toBeEditable();
     // The box can render from the server HTML alone; typing proves the
@@ -539,7 +539,7 @@ async function staysTrue(check: () => Promise<boolean>, windowMs = 1500): Promis
 }
 
 async function expectBox(page: Page): Promise<void> {
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await expect(box).toBeVisible();
   await expect(box).toBeEditable();
 }
@@ -654,7 +654,7 @@ test("W5: offline, /?q=apple opens with apple's answer though it was never visit
 
   await context.setOffline(true);
   await page.goto("/?q=apple");
-  await expect(page.getByText("manzana, poma", { exact: true })).toBeVisible();
+  await expect(page.getByText("manzana · poma", { exact: true })).toBeVisible();
   await expect(page.getByText(messages.install.failed, { exact: true })).toHaveCount(0);
 });
 

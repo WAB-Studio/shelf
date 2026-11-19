@@ -80,3 +80,17 @@
     margin-inline: 0;
   }
 }
+
+/* The margin layout: the column is the screen's reading measure and the margin sits beside it, both
+   starting on the field's row. Below 1280px the margin stacks under the field, as the split does. */
+@media (min-width: 1280px) {
+  .panels.margin {
+    grid-template-columns: minmax(0, 720px) 320px;
+    column-gap: 64px;
+    max-width: 1104px;
+  }
+
+  .margin > .side {
+    gap: var(--space-4);
+  }
+}

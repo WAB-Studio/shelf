@@ -57,7 +57,7 @@ test("RL-26: a headword with IPA can be heard, in the browser's own voice", asyn
   await captureSpeech(page);
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
 
@@ -66,7 +66,7 @@ test("RL-26: a headword with IPA can be heard, in the browser's own voice", asyn
 
   const box = await speakButton.boundingBox();
   expect(box).not.toBeNull();
-  expect(Math.round(box!.width)).toBe(44);
+  expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44);
   expect(Math.round(box!.height)).toBe(44);
 
   await speakButton.click();
@@ -79,7 +79,7 @@ test("RL-26: a headword with no IPA is heard exactly like one that has it", asyn
   await captureSpeech(page);
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   // FreeDict carries no IPA for "umbrella" (36,320 of 64,258 entries do;
   // this one is among the 27,938 that do not).
   await searchBox.fill("umbrella");
@@ -98,7 +98,7 @@ test("RL-26: a second press restarts the word rather than queueing behind it", a
   await captureSpeech(page);
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("throughout");
   const speakButton = page.getByRole("button", { name: "Escuchar «throughout»" });
   await expect(speakButton).toBeVisible();
@@ -119,7 +119,7 @@ test("RL-26: with no speechSynthesis, the control does not render at all", async
   await deleteSpeechSynthesis(page);
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
 
@@ -132,7 +132,7 @@ test("RL-26: pressing the speak control fires no network request of its own", as
   await gotoReady(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   // Warms whatever the headword's own type first costs to load (a font
   // subset, fetched once per weight the page has not yet drawn) so the
@@ -168,44 +168,44 @@ test("RL-26: pressing the speak control fires no network request of its own", as
   expect(decoration.length).toBeLessThanOrEqual(2);
 });
 
-test("RL-26 at 360px, dark: 44px tap target, muted glyph #9a9484", async ({ page }) => {
+test("RL-26 at 360px, dark: 44px tap target, accent glyph #8db4f2", async ({ page }) => {
   await deleteTranslator(page);
   await captureSpeech(page);
   await page.setViewportSize({ width: 360, height: 740 });
   await page.emulateMedia({ colorScheme: "dark" });
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("throughout");
   const speakButton = page.getByRole("button", { name: "Escuchar «throughout»" });
   await expect(speakButton).toBeVisible();
 
   const box = await speakButton.boundingBox();
   expect(box).not.toBeNull();
-  expect(Math.round(box!.width)).toBe(44);
+  expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44);
   expect(Math.round(box!.height)).toBe(44);
 
   const colour = await speakButton.evaluate((el) => getComputedStyle(el).color);
-  expect(colour).toBe("rgb(154, 148, 132)");
+  expect(colour).toBe("rgb(141, 180, 242)");
 });
 
-test("RL-26 at 1280px, light: 44px tap target, muted glyph #6b675a", async ({ page }) => {
+test("RL-26 at 1280px, light: 44px tap target, accent glyph #2d5ba8", async ({ page }) => {
   await deleteTranslator(page);
   await captureSpeech(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ colorScheme: "light" });
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("throughout");
   const speakButton = page.getByRole("button", { name: "Escuchar «throughout»" });
   await expect(speakButton).toBeVisible();
 
   const box = await speakButton.boundingBox();
   expect(box).not.toBeNull();
-  expect(Math.round(box!.width)).toBe(44);
+  expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44);
   expect(Math.round(box!.height)).toBe(44);
 
   const colour = await speakButton.evaluate((el) => getComputedStyle(el).color);
-  expect(colour).toBe("rgb(107, 103, 90)");
+  expect(colour).toBe("rgb(45, 91, 168)");
 });

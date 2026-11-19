@@ -44,7 +44,7 @@ function track(page: Page, endpoint: string, field: "headword" | "word"): string
 }
 
 async function lookUp(page: Page, word: string): Promise<void> {
-  await page.getByRole("textbox", { name: messages.search.label }).fill(word);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(word);
 }
 
 // Past one debounce window on a frozen clock: a request the screen was going

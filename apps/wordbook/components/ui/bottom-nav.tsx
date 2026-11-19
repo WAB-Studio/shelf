@@ -151,7 +151,7 @@ export function BottomNav() {
   return (
     <nav className={styles.nav} aria-label={t("label")}>
       <Heading as="h2" className={styles.title} aria-label={tMeta("title")}>
-        <Wordmark>{t.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })}</Wordmark>
+        <Wordmark>{t("brand")}</Wordmark>
       </Heading>
       {items.map(({ route, key }) => {
         const selected = pathname === route;
@@ -167,17 +167,16 @@ export function BottomNav() {
             {/* Once a query rides on the search link its address changes with every settle; prefetching each
                   one would ask the server on a keystroke. */}
             <NextLink href={href} prefetch={key === "search" && query !== "" ? false : undefined} aria-current={selected ? "page" : undefined}>
-              {/* Radix's own `md` breakpoint is 1024px (`--md` in
-                  breakpoints.css), the same one bottom-nav.module.css
-                  switches on: icon above label on the bar, icon beside
-                  label on the sidebar, with no primitive to patch. */}
+              {/* The icon rides above the label on the bar; the sidebar draws the label alone. */}
               <TapTarget
                 direction={{ initial: "column", md: "row" }}
                 align="center"
                 justify="center"
                 gap="1"
               >
-                <Glyph />
+                <span className={styles.glyph}>
+                  <Glyph />
+                </span>
                 <span className={styles.label}>{t(key)}</span>
               </TapTarget>
             </NextLink>

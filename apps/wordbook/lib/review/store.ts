@@ -70,6 +70,16 @@ export async function readCards(): Promise<ReviewCard[]> {
   });
 }
 
+// Only the keys the review holds a card for: no card is read in full.
+export async function readCardKeys(): Promise<string[]> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const request = database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAllKeys();
+    request.onsuccess = () => resolve(request.result as string[]);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 export async function readSenseChoice(key: string): Promise<SenseChoice | null> {
   const database = await openDatabase();
   return new Promise((resolve, reject) => {

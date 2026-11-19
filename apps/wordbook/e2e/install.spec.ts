@@ -59,7 +59,7 @@ test("an interrupted install leaves nothing behind, and a whole one is never fet
   assetRequests = 0;
   await page.reload();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 20_000 });
   expect(assetRequests, "the retry downloads the whole asset exactly once").toBe(1);
@@ -97,7 +97,7 @@ test("booting draws no install line, and aria-busy is true until the dictionary 
   expect(html).toContain('aria-busy="true"');
 
   await deleteTranslator(page);
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   // First open installs the dictionary, so the next one finds it on the device.
   await page.goto("/");
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached({ timeout: 30_000 });

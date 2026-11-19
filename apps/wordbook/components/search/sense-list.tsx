@@ -12,15 +12,18 @@ import { readSenseChoice, saveSenseChoice, type SenseChoice } from "@/lib/review
 import { speak, speechSupported } from "@/lib/speech/speak";
 import {
   Box,
+  Button,
   Flex,
   Grid,
   Headword,
   IconButton,
   Link,
   PosLabel,
+  SenseRow,
   Separator,
   Text,
   TapTarget,
+  VisuallyHidden,
 } from "@/components/ui";
 import { TranslationList } from "@/components/translations/translation-list";
 import { GeneratedText, type GeneratedTextState } from "./generated-text";
@@ -185,24 +188,29 @@ export function SpeakButton({
   headword,
   ipa,
   t,
+  labelled,
 }: {
   headword: string;
   ipa: string | null;
   t: ReturnType<typeof useTranslations>;
+  // Names the voice in words beside the glyph, as the entry's own line does.
+  labelled?: boolean;
 }) {
   const supported = useSyncExternalStore(subscribeNever, speechSupported, getServerSnapshot);
 
   if (!supported) return null;
 
+  const name = ipa === null ? t("listen", { headword }) : t("listenPronunciation", { headword, ipa });
+  if (labelled) {
+    return (
+      <Button type="button" size="2" variant="ghost" aria-label={name} onClick={() => speak(headword)}>
+        <SpeakerGlyph />
+        {t("listenShort")}
+      </Button>
+    );
+  }
   return (
-    <IconButton
-      type="button"
-      size="2"
-      variant="ghost"
-      color="gray"
-      aria-label={ipa === null ? t("listen", { headword }) : t("listenPronunciation", { headword, ipa })}
-      onClick={() => speak(headword)}
-    >
+    <IconButton type="button" size="2" variant="ghost" color="gray" aria-label={name} onClick={() => speak(headword)}>
       <SpeakerGlyph />
     </IconButton>
   );
@@ -435,7 +443,137 @@ function PosSegments({
           {index === 0 && interlude}
         </Flex>
       ))}
-      {folded.length > 0 && <RareFold senses={folded} ipaHeaded={ipaHeaded} shownIpa={shownIpa} t={t} />}
+      {folded.length > 0 && <RareFold senses={folded} from={shown.length + 1} shownIpa={shownIpa} t={t} />}
+    </Flex>
+  );
+}
+
+// A direct lookup's senses: the rows in order, the rare ones folded behind a line of their own. An entry
+// with several pronunciations (RL-51) gathers its rows under one head per sound, numbered straight on.
+function EntrySenses({
+  senses,
+  interlude,
+  example,
+  t,
+}: {
+  senses: readonly Sense[];
+  interlude?: ReactNode;
+  example?: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const numbered = senses.length > 1;
+  const gathered = pronunciationBlocks(senses);
+  const grouped = gathered !== null;
+  const blocks = gathered ?? [{ ipa: senses[0].ipa, senses: [...senses] }];
+  // Each block's first number: the senses before it, plus one.
+  const starts = blocks.map((_, index) => 1 + blocks.slice(0, index).reduce((sum, earlier) => sum + earlier.senses.length, 0));
+  return (
+    <Flex direction="column" gap="4">
+      {blocks.map((block, index) => {
+        const { shown, folded } = splitRare(block.senses, false);
+        const from = starts[index];
+        return (
+          <Flex direction="column" gap="3" key={index} data-pronunciation-block={grouped ? (block.ipa ?? "") : undefined}>
+            {grouped && block.ipa !== null && (
+              <Text size="3" muted truncate>
+                {block.ipa}
+              </Text>
+            )}
+            <SenseRows
+              senses={shown}
+              from={from}
+              numbered={numbered}
+              shownIpa={block.ipa}
+              example={index === 0 ? example : undefined}
+              interlude={index === 0 ? interlude : undefined}
+              t={t}
+            />
+            {folded.length > 0 && <RareFold senses={folded} from={from + shown.length} shownIpa={block.ipa} t={t} />}
+          </Flex>
+        );
+      })}
+    </Flex>
+  );
+}
+
+// The learn control of one sense: «Aprender», or «✓ Aprendiendo» on the accent's soft ground for the
+// sense the review draws. Drawn for every sense of an entry that can be learnt, one-sense words included.
+function LearnButton({ sense, t }: { sense: Sense; t: ReturnType<typeof useTranslations> }) {
+  const learnable = useContext(LearnableContext);
+  if (learnable === null) return undefined;
+  const learning = learnable.chosen === sense;
+  // The sense already learnt has nothing left to press: it stays a button that reads its state.
+  return learning ? (
+    <Button type="button" variant="soft" size="3" aria-pressed="true" aria-disabled="true">
+      {t("learningThisSense")}
+    </Button>
+  ) : (
+    <Button type="button" variant="outline" color="gray" size="3" onClick={() => learnable.choose(sense)}>
+      {t("learnThisSense")}
+    </Button>
+  );
+}
+
+// The entry's senses in one order, each a ruled row: its part of speech (numbered once there are two or
+// more), the main translation large with the others after « · », the English definition and the example,
+// and the learn control on the right. `example` and `interlude` belong to the first row.
+function SenseRows({
+  senses,
+  from = 1,
+  numbered,
+  shownIpa,
+  example,
+  interlude,
+  t,
+}: {
+  senses: readonly Sense[];
+  from?: number;
+  numbered: boolean;
+  shownIpa: string | null;
+  example?: ReactNode;
+  interlude?: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <Flex direction="column">
+      {senses.map((sense, index) => {
+        const ownIpa = sense.ipa !== null && (shownIpa === null || ipaKey(sense.ipa) !== ipaKey(shownIpa)) ? sense.ipa : null;
+        return (
+          <Flex direction="column" key={index}>
+            <SenseRow
+              label={
+                <Flex align="center" gap="3">
+                  <PosLabel>
+                    {numbered ? `${from + index} · ` : ""}
+                    {t(`pos.${sense.pos}`)}
+                  </PosLabel>
+                  {ownIpa !== null && (
+                    <Text size="2" muted truncate>
+                      {ownIpa}
+                    </Text>
+                  )}
+                </Flex>
+              }
+              action={<LearnButton sense={sense} t={t} />}
+            >
+              <Flex direction="column" gap="2">
+                {index === 0 && from === 1 && <VisuallyHidden>{t("translations")}</VisuallyHidden>}
+                <TranslationList items={sense.translations} lead />
+                {sense.definition !== null && (
+                  <div data-definition-block="">
+                    <VisuallyHidden>{t("definitionEnglish")}</VisuallyHidden>
+                    <Text size="2" muted english>
+                      {sense.definition}
+                    </Text>
+                  </div>
+                )}
+                {index === 0 && example}
+              </Flex>
+            </SenseRow>
+            {index === 0 && interlude}
+          </Flex>
+        );
+      })}
     </Flex>
   );
 }
@@ -444,12 +582,13 @@ function PosSegments({
 // behind a line of their own (`bleak`'s river fish).
 function RareFold({
   senses,
-  ipaHeaded,
+  from,
   shownIpa,
   t,
 }: {
   senses: readonly Sense[];
-  ipaHeaded: boolean;
+  // The number the first folded sense carries.
+  from: number;
   shownIpa: string | null;
   t: ReturnType<typeof useTranslations>;
 }) {
@@ -463,9 +602,7 @@ function RareFold({
           </TapTarget>
         </button>
       </Link>
-      {open && (
-        <PosSegments senses={senses} compact={false} ipaHeaded={ipaHeaded} shownIpa={shownIpa} lead={false} t={t} />
-      )}
+      {open && <SenseRows senses={senses} from={from} numbered shownIpa={shownIpa} t={t} />}
     </Flex>
   );
 }
@@ -609,17 +746,8 @@ function CorrectionOffer({
 
 // The parts of speech in the order the answer draws them, the fold's after the senses it follows in each block,
 // so the first of the index is the first block, which draws no label of its own.
-function indexParts(groups: readonly (readonly Sense[])[]): Sense["pos"][] {
-  const drawn = groups.flatMap((group) => {
-    const { shown, folded } = splitRare(group);
-    return [...shown, ...folded];
-  });
-  return [...new Set(drawn.map((sense) => sense.pos))];
-}
-
-// Under the entry's headword, on one line: its sound, the voice and an index of the parts of speech
-// it comes in. The sound shows here only when one pronunciation heads the whole entry; with several,
-// each block carries its own head.
+// Under the entry's headword, on one line: its sound when one pronunciation heads the whole entry (each
+// block carries its own head otherwise), the voice and how many senses it has.
 function EntryMeta({
   senses,
   headword,
@@ -633,9 +761,8 @@ function EntryMeta({
 }) {
   const blocks = pronunciationBlocks(senses);
   const ipa = blocks === null ? senses[0].ipa : null;
-  const parts = indexParts(blocks === null ? [senses] : blocks.map((block) => block.senses));
   return (
-    <Flex align="center" gap="3" wrap="wrap" data-entry-index="">
+    <Flex align="center" gap="4" wrap="wrap" data-entry-index="">
       {ipa !== null && (
         <Grid minWidth="0" flexShrink="1">
           <Text size="3" muted truncate>
@@ -643,15 +770,10 @@ function EntryMeta({
           </Text>
         </Grid>
       )}
-      {speaker && <SpeakButton headword={headword} ipa={leadPronunciation(senses)} t={t} />}
-      <Flex align="center" gap="2" wrap="wrap">
-        {parts.map((pos, index) => (
-          <Flex key={pos} align="center" gap="2">
-            {index > 0 && <PosLabel muted>·</PosLabel>}
-            <PosLabel>{t(`pos.${pos}`)}</PosLabel>
-          </Flex>
-        ))}
-      </Flex>
+      {speaker && <SpeakButton headword={headword} ipa={leadPronunciation(senses)} t={t} labelled />}
+      <Text size="3" muted>
+        {t("senseCount", { count: senses.length })}
+      </Text>
     </Flex>
   );
 }
@@ -805,13 +927,10 @@ export function SenseList({
             <>
               <EntryMeta senses={answer.exact.senses} headword={answer.exact.headword} speaker={showSpeaker} t={t} />
               <LearnableSenses word={answer.exact.headword} senses={answer.exact.senses} ranked={answer.exact.ranked ?? true}>
-                <SenseGroup
+                <EntrySenses
                   senses={answer.exact.senses}
-                  compact={false}
                   interlude={offerInside ? offer : undefined}
-                  lead
                   example={generated && <GeneratedText state={generated} />}
-                  shownIpa={answer.exact.senses[0].ipa}
                   t={t}
                 />
               </LearnableSenses>

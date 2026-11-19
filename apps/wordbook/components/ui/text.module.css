@@ -94,3 +94,11 @@
   line-height: 1.25;
   letter-spacing: -0.01em;
 }
+
+.inkSecondary.inkSecondary {
+  color: var(--rl-ink-secondary);
+}
+
+.accent.accent {
+  color: var(--rl-accent);
+}

@@ -55,7 +55,7 @@ async function openReady(page: Page): Promise<Locator> {
   await page.goto("/");
   await assetResponse;
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await expect(box).toBeVisible();
   return box;
 }

@@ -74,6 +74,19 @@
   .bar + .spacer {
     display: none;
   }
+
+  /* The card fills the column it is given instead of keeping its ratio. */
+  .card {
+    max-width: none;
+    aspect-ratio: auto;
+    border-radius: 22px;
+  }
+
+  .face {
+    min-height: 360px;
+    padding: 56px 48px;
+    gap: 12px;
+  }
 }
 
 @media (min-width: 700px) and (max-width: 1023px) {

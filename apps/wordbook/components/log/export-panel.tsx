@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { civilDay } from "@/lib/format/zone";
 import { lookupInstalled } from "@/lib/dictionary/lookup-many";
 import { buildAnkiExport, readAnkiCounts } from "@/lib/log/anki";
-import { LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { buildExport } from "@/lib/log/export";
-import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
-import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
-import { Button, Card, Flex, Link, MetaLabel, Separator, Spinner, TapTarget, Text } from "@/components/ui";
+import { countRecords } from "@/lib/log/record";
+import { onRecordChanged } from "@/lib/log/record-changed";
+import { CLEAR_ASKED_EVENT } from "@/components/log/clear-panel";
+import { Button, Flex, Menu, Separator, Text } from "@/components/ui";
 
 type CountState = { kind: "loading" } | { kind: "ready"; count: number } | { kind: "failed" };
 type ExportState = { kind: "idle" } | { kind: "building" } | { kind: "done" } | { kind: "failed" };
@@ -40,7 +41,8 @@ function downloadBlob(blob: Blob, fileName: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function ExportPanel() {
+// The record's two files and its wipe behind one «Descargar» button; what they report sits under it.
+export function DownloadMenu() {
   const t = useTranslations("log");
   const tWord = useTranslations("word");
   const [countState, setCountState] = useState<CountState>({ kind: "loading" });
@@ -80,17 +82,11 @@ export function ExportPanel() {
     // reloading the page: `LOG_CLEARED_EVENT` can drop the count to zero,
     // which hides the link (`history-list.tsx` rereads its own list the
     // same way).
-    window.addEventListener(LOG_CLEARED_EVENT, count);
-    window.addEventListener(LOG_FLUSHED_EVENT, count);
     // A delete or a pull changes the rows both files are built from.
-    window.addEventListener(LOG_DELETED_EVENT, count);
-    window.addEventListener(SYNC_LANDED_EVENT, count);
+    const off = onRecordChanged(count);
     return () => {
       cancelled = true;
-      window.removeEventListener(LOG_CLEARED_EVENT, count);
-      window.removeEventListener(LOG_FLUSHED_EVENT, count);
-      window.removeEventListener(LOG_DELETED_EVENT, count);
-      window.removeEventListener(SYNC_LANDED_EVENT, count);
+      off();
     };
   }, []);
 
@@ -121,129 +117,115 @@ export function ExportPanel() {
     }
   }
 
-  // An empty record has no file worth offering: no card either.
+  // An empty record has no file worth offering.
   if (countState.kind === "ready" && countState.count === 0) return null;
 
+  const loading = countState.kind === "loading";
+  // No card to give: the item is gone and its place says why (RL-72). Until the count is known the
+  // item does not draw; a failed count draws it, and the click builds and reports.
+  const ankiOffered = ankiCounts.kind === "failed" || (ankiCounts.kind === "ready" && ankiCounts.cards > 0);
+
   return (
-    <Card>
-    <Flex direction="column" gap="3" align="start">
-      <MetaLabel>{t("study.downloadsTitle")}</MetaLabel>
-      {countState.kind === "loading" && (
-        <Flex align="center" gap="2">
-          <Spinner />
-          <Text size="2" muted>
-            {t("counting")}
-          </Text>
-        </Flex>
-      )}
-
-      {countState.kind === "failed" && (
-        <Text size="2" muted>
-          {t("countFailed")}
-        </Text>
-      )}
-
-      {/* The study's own header already says the count (`study.header`);
-          nothing here repeats it. An empty store has no file worth
-          offering, so a confirmed zero drops the link along with it. */}
-      {countState.kind !== "ready" || countState.count > 0 ? (
-        <>
-          {/* An underlined link, not a filled button: `/registro`'s weight is the
-              study above, not this download (docs/wordbook/DESIGN.md "Settled",
-              "The study replaces the download as the weight of `/registro`"). */}
-          <Link asChild underline="always">
-            <button type="button" onClick={() => void handleExport()} disabled={exportState.kind === "building"}>
-              <TapTarget align="center" px="1">
-                {exportState.kind === "building" ? t("exporting") : t("study.download")}
-              </TapTarget>
-            </button>
-          </Link>
-
-          {exportState.kind === "done" && (
-            <Text size="2" muted>
-              {t("exported")}
-            </Text>
+    <Flex direction="column" gap="2" align="end">
+      <Menu.Root>
+        <Menu.Trigger>
+          <Button size="3" variant="soft" disabled={loading} aria-busy={loading}>
+            {t("study.downloadMenu")}
+            <ChevronDown size={16} aria-hidden="true" />
+          </Button>
+        </Menu.Trigger>
+        <Menu.Content align="end">
+          <Menu.Item disabled={exportState.kind === "building"} onSelect={() => void handleExport()}>
+            {t("study.download")}
+          </Menu.Item>
+          {ankiOffered && (
+            <Menu.Item disabled={ankiState.kind === "building"} onSelect={() => void handleAnki()}>
+              {t("study.downloadAnki")}
+            </Menu.Item>
           )}
-
-          {exportState.kind === "failed" && (
-            <Text size="2" muted>
-              {t("exportFailed")}
-            </Text>
-          )}
-
-          {/* No card to give: the link is gone and its place says why
-              (RL-72). Until the count is known the link does not draw; a
-              failed count draws it, and the click builds and reports. */}
-          {/* Words that wait are not «sin traducción guardada»: with any, the
-              no-card line gives way to the waiting line and the left-out one. */}
+          {/* Words that wait are not «sin traducción guardada»: with any, the no-card line gives way to
+              the waiting line and the left-out one. */}
           {ankiCounts.kind === "ready" && ankiCounts.cards === 0 && ankiCounts.pending > 0 && (
-            <Flex direction="column" gap="1">
-              <Text size="2" muted>
-                {t("study.ankiPending", { count: ankiCounts.pending })}
-              </Text>
-              {ankiCounts.skipped > 0 && (
-                <Text size="2" muted>
-                  {t("study.ankiSkipped", { count: ankiCounts.skipped })}
-                </Text>
-              )}
-            </Flex>
-          )}
-
-          {ankiCounts.kind === "ready" && ankiCounts.cards === 0 && ankiCounts.pending === 0 && (
-            <Text size="2" muted>
-              {t("study.ankiNone", { words: ankiCounts.words })}
-            </Text>
-          )}
-
-          {(ankiCounts.kind === "failed" || (ankiCounts.kind === "ready" && ankiCounts.cards > 0)) && (
             <>
-            <Link asChild underline="always">
-              <button type="button" onClick={() => void handleAnki()} disabled={ankiState.kind === "building"}>
-                <TapTarget align="center" px="1">
-                  {ankiState.kind === "building" ? t("study.ankiPreparing") : t("study.downloadAnki")}
-                </TapTarget>
-              </button>
-            </Link>
-
-              {ankiState.kind === "done" && (
-                <Flex direction="column" gap="1">
-                  <Text size="2" muted>
-                    {t("study.ankiDone", { cards: ankiState.cards })}
-                  </Text>
-                  {ankiState.plain && (
-                    <Text size="2" muted>
-                      {t("study.ankiPlain")}
-                    </Text>
-                  )}
-                  {ankiState.pending > 0 && (
-                    <Text size="2" muted>
-                      {t("study.ankiPending", { count: ankiState.pending })}
-                    </Text>
-                  )}
-                  {ankiState.skipped > 0 && (
-                    <Text size="2" muted>
-                      {t("study.ankiSkipped", { count: ankiState.skipped })}
-                    </Text>
-                  )}
-                </Flex>
-              )}
+              <Menu.Note>{t("study.ankiPending", { count: ankiCounts.pending })}</Menu.Note>
+              {ankiCounts.skipped > 0 && <Menu.Note>{t("study.ankiSkipped", { count: ankiCounts.skipped })}</Menu.Note>}
             </>
           )}
-
-          {ankiState.kind === "failed" && (
-            <Flex direction="column" gap="3" align="start">
-              <Separator size="4" />
-              <Text size="2" weight="bold">
-                {t("study.ankiFailed")}
-              </Text>
-              <Button size="2" onClick={() => void handleAnki()}>
-                {t("retry")}
-              </Button>
-            </Flex>
+          {ankiCounts.kind === "ready" && ankiCounts.cards === 0 && ankiCounts.pending === 0 && (
+            <Menu.Note>{t("study.ankiNone", { words: ankiCounts.words })}</Menu.Note>
           )}
-        </>
-      ) : null}
+          {countState.kind === "ready" && countState.count > 0 && (
+            <>
+              <Menu.Separator />
+              <Menu.Item onSelect={() => window.dispatchEvent(new Event(CLEAR_ASKED_EVENT))}>
+                {t("clear.trigger")}
+              </Menu.Item>
+            </>
+          )}
+        </Menu.Content>
+      </Menu.Root>
+
+      <Flex direction="column" gap="1" align="end" role="status">
+        {countState.kind === "failed" && (
+          <Text size="2" muted>
+            {t("countFailed")}
+          </Text>
+        )}
+        {exportState.kind === "building" && (
+          <Text size="2" muted>
+            {t("exporting")}
+          </Text>
+        )}
+        {exportState.kind === "done" && (
+          <Text size="2" muted>
+            {t("exported")}
+          </Text>
+        )}
+        {exportState.kind === "failed" && (
+          <Text size="2" muted>
+            {t("exportFailed")}
+          </Text>
+        )}
+        {ankiState.kind === "building" && (
+          <Text size="2" muted>
+            {t("study.ankiPreparing")}
+          </Text>
+        )}
+        {ankiState.kind === "done" && (
+          <>
+            <Text size="2" muted>
+              {t("study.ankiDone", { cards: ankiState.cards })}
+            </Text>
+            {ankiState.plain && (
+              <Text size="2" muted>
+                {t("study.ankiPlain")}
+              </Text>
+            )}
+            {ankiState.pending > 0 && (
+              <Text size="2" muted>
+                {t("study.ankiPending", { count: ankiState.pending })}
+              </Text>
+            )}
+            {ankiState.skipped > 0 && (
+              <Text size="2" muted>
+                {t("study.ankiSkipped", { count: ankiState.skipped })}
+              </Text>
+            )}
+          </>
+        )}
+      </Flex>
+
+      {ankiState.kind === "failed" && (
+        <Flex direction="column" gap="3" align="end">
+          <Separator size="4" />
+          <Text size="2" weight="bold">
+            {t("study.ankiFailed")}
+          </Text>
+          <Button size="2" onClick={() => void handleAnki()}>
+            {t("retry")}
+          </Button>
+        </Flex>
+      )}
     </Flex>
-    </Card>
   );
 }

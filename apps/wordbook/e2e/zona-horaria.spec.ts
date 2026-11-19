@@ -54,10 +54,12 @@ async function seedCard(page: Page, card: { key: string; due: number }): Promise
   await page.evaluate(
     (card) =>
       new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open("reading-review", 2);
+        // `/registro` already opens the review's database at its own version.
+        const request = indexedDB.open("reading-review", 3);
         request.onupgradeneeded = () => {
-          request.result.createObjectStore("cards", { keyPath: "key" });
-          request.result.createObjectStore("senses", { keyPath: "key" });
+          for (const name of ["cards", "senses", "gone", "meta"]) {
+            if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name, { keyPath: "key" });
+          }
         };
         request.onsuccess = () => {
           const db = request.result;

@@ -31,7 +31,7 @@ async function openReady(page: Page): Promise<void> {
 // worker's index build either way.
 async function dictionaryReady(page: Page): Promise<void> {
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
 }
 
 type Row = {
@@ -154,7 +154,7 @@ test("respondida: doomscrolling with a 200 answer leaves one unlisted row carryi
   await stubUnlisted(BODY);
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("doomscrolling");
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 2000 });
   await settle(page, box);
@@ -174,7 +174,7 @@ test("RL-76: doomscrolling answered 204 leaves one pending row, a schema-4 miss 
   await deleteTranslator(page);
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   const answered = page.waitForResponse((r) => isUnlistedPost(r.url()));
   await box.fill("doomscrolling");
   expect((await answered).status()).toBe(204);
@@ -211,7 +211,7 @@ test("RL-76: an answer held while the reader clears the box leaves a pending row
   );
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("doomscrolling");
   await expect.poll(() => requested, { timeout: 3000 }).toBe(true);
   await settle(page, box);
@@ -233,7 +233,7 @@ test("forma con lema: ran, even with a network lemma, stays inflected and writes
   await stubUnlisted({ ...BODY, translations: ["corrió"], lemma: "run", rule: "irregular" });
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("ran");
   await expect(page.getByRole("heading", { name: "ran", exact: true })).toBeVisible();
   await settle(page, box);
@@ -250,7 +250,7 @@ test("caché de la pestaña: a second visit to doomscrolling after another word 
   await answerEachWord(page);
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   const visits = new Map<string, number>();
   for (const word of ["doomscrolling", "coccidiosis", "doomscrolling"]) {
     await box.fill(word);
@@ -282,7 +282,7 @@ test("corte: translations joined past 120 characters are stored cut, never longe
   await stubUnlisted({ ...BODY, translations: long });
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("doomscrolling");
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 2000 });
   await settle(page, box);
@@ -321,7 +321,7 @@ test("bajo su búsqueda: an answer for coccidiosis that arrives after the box mo
   );
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("coccidiosis");
   await expect.poll(() => calls, { timeout: 10000 }).toBe(1);
   await box.fill("doomscrolling");
@@ -349,7 +349,7 @@ test("una vez: a focus change and a colour-scheme change after the answer was re
   await stubUnlisted(BODY);
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("doomscrolling");
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 10000 });
 
@@ -376,7 +376,7 @@ test("bajo su búsqueda: returning to a word whose answer the tab holds records 
   await answerEachWord(page);
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   const visits = new Map<string, number>();
   for (const word of ["doomscrolling", "coccidiosis", "doomscrolling"]) {
     await box.fill(word);
@@ -456,7 +456,7 @@ async function seedFromHome(
     await openReady(page);
   } else {
     await page.goto("/");
-    await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   }
   await page.evaluate(
     ({ version, sync, lookups }) =>
@@ -518,7 +518,7 @@ test("700 hecho, con red: searching doomscrolling leaves a row carrying translat
   });
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("doomscrolling");
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 3000 });
   await settle(page, box);

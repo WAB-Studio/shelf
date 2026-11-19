@@ -59,7 +59,7 @@ test("went: the form and its lemma answer, and nothing is asked of the network",
   await openReady(page);
   const sent = trackUnlisted(page);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill("went");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("went");
   await expect(page.getByRole("heading", { name: "went", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(FORM_OF_WENT)).toBeVisible();
   await expect(page.getByRole("heading", { name: "go", exact: true })).toBeVisible();
@@ -75,7 +75,7 @@ test("went: the lemma box is the first thing under the heading", async ({ page }
   await deleteTranslator(page);
   await openReady(page);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill("went");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("went");
   const heading = page.getByRole("heading", { name: "went", exact: true });
   await expect(heading).toBeVisible({ timeout: 5000 });
   await afterRender(page);
@@ -94,7 +94,7 @@ test("coccidiosis resolved: neither «no tiene» nor the spelling hint, and the 
   await stubUnlisted({ ...FORM_ANSWER, translations: ["coccidiosis"] });
   await openReady(page);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill("coccidiosis");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("coccidiosis");
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 5000 });
   await afterRender(page);
 
@@ -113,7 +113,7 @@ test("coccidiosis pending: «no tiene» stands, the spelling hint does not", asy
     await route.fulfill({ status: 204, headers: { [STUB_HEADER]: "1" } });
   });
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill("coccidiosis");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("coccidiosis");
   await expect(page.getByText(messages.word.networkPending)).toBeVisible({ timeout: 5000 });
 
   await expect(page.getByText(messages.search.notFound)).toBeVisible();
@@ -125,7 +125,7 @@ test("coccidiosis failed (204): «no tiene», the hint and the failure line all 
   await deleteTranslator(page);
   await openReady(page);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill("coccidiosis");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("coccidiosis");
   await expect(page.getByText(messages.word.networkFailed)).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.search.notFound)).toBeVisible();
   await expect(page.getByText(messages.search.notFoundHint)).toBeVisible();
@@ -137,7 +137,7 @@ test("whereat: the offer for whereas stands and nothing is asked of the network"
   await openReady(page);
   const sent = trackUnlisted(page);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill("whereat");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("whereat");
   await expect(page.getByText(messages.search.correctionTitle)).toBeVisible({ timeout: 5000 });
   await expect(page.getByRole("link", { name: "whereas", exact: false })).toBeVisible();
   await afterRender(page);
@@ -172,7 +172,7 @@ test("coccidiosis slow network: the spelling hint never shows before the network
     [messages.search.notFoundHint, messages.word.networkFailed],
   );
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill("coccidiosis");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("coccidiosis");
   await expect(page.getByText(messages.word.networkPending)).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);
 

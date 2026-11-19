@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 
 import { createTranslator } from "next-intl";
-import { expect, studyHeader, test } from "./fixtures";
-import type { Page, Route } from "@playwright/test";
+import { askToClear, expect, studyHeader, test } from "./fixtures";
+import type { Locator, Page, Route } from "@playwright/test";
 
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
@@ -134,7 +134,8 @@ async function seedRows(page: Page, count: number): Promise<void> {
 
 async function downloadExport(page: Page): Promise<LogExport> {
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: messages.log.study.download }).click();
+  await page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true }).click();
+  await page.getByRole("menuitem", { name: messages.log.study.download, exact: true }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^registro-lecturas-\d{4}-\d{2}-\d{2}\.json$/);
   const path = await download.path();
@@ -191,7 +192,7 @@ test("the nav reaches /registro, which counts what was searched and exports it",
 
   // A lookup typed before the worker is up waits in its queue and answers
   // when it is: the heading below is the wait.
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("apple");
   // A lookup is recorded only once its answer has settled: clearing the box
   // earlier supersedes the query before it resolves, and nothing is logged.
@@ -244,7 +245,7 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
   await page.goto("/");
   await assetResponse;
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const tenKeystrokes = "accountant";
 
   // A warm-up run of the exact same keystrokes first, autocomplete included,
@@ -301,8 +302,20 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
 type SeedLookup = Omit<LookupRecord, "id">;
 
 const study = messages.log.study;
-const jsonControl = (page: Page) => page.getByRole("button", { name: study.download, exact: true });
-const ankiControl = (page: Page) => page.getByRole("button", { name: study.downloadAnki, exact: true });
+const downloadMenu = (page: Page) => page.getByRole("button", { name: study.downloadMenu, exact: true });
+const jsonControl = (page: Page) => page.getByRole("menuitem", { name: study.download, exact: true });
+const ankiControl = (page: Page) => page.getByRole("menuitem", { name: study.downloadAnki, exact: true });
+// The files and their notes sit in a menu that shuts on every choice: open it when it is shut, then
+// hand back what was asked for.
+async function inMenu(page: Page, item: Locator): Promise<Locator> {
+  const menu = page.getByRole("menu");
+  // A menu on its way out still reads as visible: look again until one stays.
+  await expect(async () => {
+    if (!(await menu.isVisible())) await downloadMenu(page).click();
+    await expect(menu).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  return item;
+}
 
 function studyRow(word: string, translation: string | null, at: number, extra: Partial<SeedLookup> = {}): SeedLookup {
   return {
@@ -350,7 +363,7 @@ function copyOn(): SyncState {
 // race this write (same reason as registro-copia.spec.ts).
 async function seedStudy(page: Page, rows: SeedLookup[], sync: SyncState | null = null): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {
@@ -394,12 +407,12 @@ async function openSeeded(page: Page): Promise<void> {
   await blockDictionary(page);
   await seedStudy(page, STUDY_ROWS);
   await page.goto("/registro");
-  await expect(jsonControl(page)).toBeVisible();
+  await expect(downloadMenu(page)).toBeVisible();
 }
 
 async function downloadAnki(page: Page): Promise<{ name: string; text: string }> {
   const downloadPromise = page.waitForEvent("download");
-  await ankiControl(page).click();
+  await (await inMenu(page, ankiControl(page))).click();
   const download = await downloadPromise;
   const path = await download.path();
   if (!path) throw new Error("no download path");
@@ -408,13 +421,12 @@ async function downloadAnki(page: Page): Promise<{ name: string; text: string }>
 
 test("RL-65: with rows, the JSON and the Anki controls both show, by exact name", async ({ page }) => {
   await openSeeded(page);
-  await expect(jsonControl(page)).toBeVisible();
-  await expect(ankiControl(page)).toBeVisible();
-  // The Anki control sits under the JSON one, same column.
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toBeVisible();
+  // The Anki item sits under the JSON one, in the same menu.
   const json = await jsonControl(page).boundingBox();
   const anki = await ankiControl(page).boundingBox();
   expect(anki!.y).toBeGreaterThan(json!.y);
-  expect(anki!.height).toBeGreaterThanOrEqual(44);
 });
 
 test("RL-65: the Anki download is registro-lecturas-<date>-anki.csv, one card per translated group in study order, and the done line counts them", async ({
@@ -429,7 +441,7 @@ test("RL-65: the Anki download is registro-lecturas-<date>-anki.csv, one card pe
   expect(file.text.endsWith("\n")).toBe(true);
   await expect(page.getByText(t("log.study.ankiDone", { cards: EXPECTED_CARDS.length }))).toBeVisible();
   // The JSON control is still there beside the line.
-  await expect(jsonControl(page)).toBeVisible();
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
 });
 
 test("RL-65: the CSV declares text/csv;charset=utf-8", async ({ page }) => {
@@ -482,18 +494,17 @@ test("RL-65: while the cards are read, the Anki control reads «Preparando las t
       }),
   );
   const downloadPromise = page.waitForEvent("download");
-  await ankiControl(page).click();
-  const preparing = page.getByRole("button", { name: study.ankiPreparing, exact: true });
-  await expect(preparing).toBeVisible();
-  await expect(preparing).toBeDisabled();
-  await expect(ankiControl(page)).toHaveCount(0);
-  await expect(jsonControl(page)).toBeEnabled();
+  await (await inMenu(page, ankiControl(page))).click();
+  await expect(page.getByText(study.ankiPreparing, { exact: true })).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toBeDisabled();
+  await expect(await inMenu(page, jsonControl(page))).toBeEnabled();
   await expect(page.getByText(study.ankiFailed)).toHaveCount(0);
 
+  await page.keyboard.press("Escape");
   await page.evaluate(() => ((window as unknown as { __hold: boolean }).__hold = false));
   await downloadPromise;
   await expect(page.getByText(t("log.study.ankiDone", { cards: EXPECTED_CARDS.length }))).toBeVisible();
-  await expect(ankiControl(page)).toBeEnabled();
+  await expect(await inMenu(page, ankiControl(page))).toBeEnabled();
 });
 
 test("RL-65: a failed read shows «No se pudo preparar el archivo para Anki» and «Reintentar», and the retry reads again and succeeds", async ({
@@ -504,7 +515,7 @@ test("RL-65: a failed read shows «No se pudo preparar el archivo para Anki» an
   page.on("download", () => (downloads += 1));
   // The page opens transactions of its own after load (the history list, the
   // sync pull, the counts); under load one of them reaches the hook before the
-  // click and spends a hook armed up front. The hook arms on the click itself
+  // click and spends a hook armed up front. The hook arms on the click on the menu's item
   // and fails the first read of `lookups` after it, which is the study's.
   await page.evaluate(() => {
     const w = window as unknown as { __thrown: number; __failNext: boolean };
@@ -513,9 +524,9 @@ test("RL-65: a failed read shows «No se pudo preparar el archivo para Anki» an
     document.addEventListener(
       "click",
       (event) => {
-        if (event.target instanceof Element && event.target.closest("button")) w.__failNext = true;
+        if (event.target instanceof Element && event.target.closest('[role="menuitem"]')) w.__failNext = true;
       },
-      { capture: true, once: true },
+      { capture: true },
     );
     const original = IDBDatabase.prototype.transaction;
     IDBDatabase.prototype.transaction = function (...args: Parameters<typeof original>) {
@@ -528,12 +539,13 @@ test("RL-65: a failed read shows «No se pudo preparar el archivo para Anki» an
       return original.apply(this, args);
     };
   });
-  await ankiControl(page).click();
+  await (await inMenu(page, ankiControl(page))).click();
   await expect(page.getByText(study.ankiFailed, { exact: true })).toBeVisible();
   const retry = page.getByRole("button", { name: messages.log.retry, exact: true });
   await expect(retry).toBeVisible();
-  await expect(jsonControl(page)).toBeVisible();
-  await expect(ankiControl(page)).toBeVisible();
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toBeVisible();
+  await page.keyboard.press("Escape");
   expect(downloads, "a failed read offered a file").toBe(0);
   expect(await page.evaluate(() => (window as unknown as { __thrown: number }).__thrown)).toBe(1);
 
@@ -552,30 +564,29 @@ test("RL-65: a confirmed zero shows neither control, and clearing the log takes 
   await deleteTranslator(page);
   await page.goto("/registro");
   await expect(page.getByText(study.emptyTitle)).toBeVisible();
-  await expect(jsonControl(page)).toHaveCount(0);
-  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(downloadMenu(page)).toHaveCount(0);
 
   await seedStudy(page, STUDY_ROWS);
   await page.goto("/registro");
-  await expect(ankiControl(page)).toBeVisible();
-  await expect(jsonControl(page)).toBeVisible();
-  await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+  await expect(await inMenu(page, ankiControl(page))).toBeVisible();
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
+  await page.keyboard.press("Escape");
+  await askToClear(page);
   await page.getByRole("button", { name: messages.log.clear.soleAction }).click();
   await expect(page.getByText(study.emptyTitle)).toBeVisible();
-  await expect(jsonControl(page)).toHaveCount(0);
-  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(downloadMenu(page)).toHaveCount(0);
 });
 
 // `deleteStudyGroup` lives in a module the production page does not expose,
 // and the row's ✕ is K10's. This test therefore does what that function does
 // to the store (removes the group's rows in one transaction) and fires the
 // event it announces itself with, `voyager:log-deleted`.
-test("RL-66: after the last group is deleted, both controls leave without a reload", async ({ page }) => {
+test("RL-99: after the last group is deleted, both controls leave without a reload", async ({ page }) => {
   await deleteTranslator(page);
   await seedStudy(page, [studyRow("alpha", "alfa", NOW)]);
   await page.goto("/registro");
-  await expect(ankiControl(page)).toBeVisible();
-  await expect(jsonControl(page)).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toBeVisible();
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
 
   let loads = 0;
   page.on("load", () => (loads += 1));
@@ -597,8 +608,7 @@ test("RL-66: after the last group is deleted, both controls leave without a relo
         };
       }),
   );
-  await expect(jsonControl(page)).toHaveCount(0);
-  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(downloadMenu(page)).toHaveCount(0);
   expect(loads, "the page reloaded").toBe(0);
 });
 
@@ -646,13 +656,12 @@ test("RL-65: rows a sync round lands show both controls without a reload", async
 
   await page.goto("/registro");
   await expect(page.getByText(study.emptyTitle)).toBeVisible();
-  await expect(jsonControl(page)).toHaveCount(0);
-  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(downloadMenu(page)).toHaveCount(0);
   const loadsBefore = loads;
 
   release();
-  await expect(jsonControl(page)).toBeVisible();
-  await expect(ankiControl(page)).toBeVisible();
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toBeVisible();
   expect(loads).toBe(loadsBefore);
 
   const file = await downloadAnki(page);
@@ -689,25 +698,25 @@ async function openRows(page: Page, rows: SeedLookup[]): Promise<void> {
   await blockDictionary(page);
   await seedStudy(page, rows);
   await page.goto("/registro");
-  await expect(jsonControl(page)).toBeVisible();
+  await expect(downloadMenu(page)).toBeVisible();
 }
 
 test("RL-72: a record with no card offers no Anki file and says why, the JSON link stays", async ({ page }) => {
   await openRows(page, [unlistedRow("blorp", null, NOW - 20), unlistedRow("flarn", null, NOW - 10)]);
-  await expect(page.getByText(t("log.study.ankiNone", { words: 2 }), { exact: true })).toBeVisible();
-  await expect(ankiControl(page)).toHaveCount(0);
-  await expect(jsonControl(page)).toBeVisible();
+  await expect(await inMenu(page, page.getByText(t("log.study.ankiNone", { words: 2 }), { exact: true }))).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toHaveCount(0);
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
 });
 
 test("RL-72: one word with no card says «tu palabra…»", async ({ page }) => {
   await openRows(page, [unlistedRow("blorp", null, NOW)]);
-  await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toBeVisible();
-  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(await inMenu(page, page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true }))).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toHaveCount(0);
 });
 
 test("RL-72: a network word with a definition gives a card whose back is the definition", async ({ page }) => {
   await openRows(page, [unlistedRow("blorp", "a made-up word", NOW)]);
-  await expect(ankiControl(page)).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toBeVisible();
   await expect(page.getByText(/^Para Anki:/)).toHaveCount(0);
   const file = await downloadAnki(page);
   expect(file.text.split("\n").slice(2).filter((line) => line !== "")).toEqual(['"blorp","a made-up word"']);
@@ -732,7 +741,7 @@ test("RL-72: when every word gives a card, no left-out line shows", async ({ pag
 
 test("RL-72: deleting the only card's row leaves the no-card line, without a reload", async ({ page }) => {
   await openRows(page, [studyRow("alpha", "alfa", NOW - 20), unlistedRow("blorp", null, NOW - 10)]);
-  await expect(ankiControl(page)).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toBeVisible();
   let loads = 0;
   page.on("load", () => (loads += 1));
   await page.evaluate(
@@ -759,9 +768,9 @@ test("RL-72: deleting the only card's row leaves the no-card line, without a rel
         };
       }),
   );
-  await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toBeVisible();
-  await expect(ankiControl(page)).toHaveCount(0);
-  await expect(jsonControl(page)).toBeVisible();
+  await expect(await inMenu(page, page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true }))).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toHaveCount(0);
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
   expect(loads, "the page reloaded").toBe(0);
 });
 
@@ -806,12 +815,12 @@ test("RL-72: a sync round that lands a translated row on a no-card record brings
   page.on("load", () => (loads += 1));
 
   await page.goto("/registro");
-  await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toBeVisible();
-  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(await inMenu(page, page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true }))).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toHaveCount(0);
   const loadsBefore = loads;
 
   release();
-  await expect(ankiControl(page)).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toBeVisible();
   await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toHaveCount(0);
   expect(loads).toBe(loadsBefore);
 });
@@ -822,7 +831,7 @@ test("while the JSON is built, its control reads «Exportando…» and is disabl
   await openSeeded(page);
   // The Anki control waits on its own readonly count of `lookups`, which the JSON control does not:
   // a count still in flight when the hold starts would queue behind it and the control would never show.
-  await expect(ankiControl(page)).toBeEnabled();
+  await expect(await inMenu(page, ankiControl(page))).toBeEnabled();
   // A readwrite transaction on `lookups` kept alive by chained reads: the
   // export's readonly transaction queues behind it until it is released.
   await page.evaluate(
@@ -851,16 +860,15 @@ test("while the JSON is built, its control reads «Exportando…» and is disabl
       }),
   );
   const downloadPromise = page.waitForEvent("download");
-  await jsonControl(page).click();
-  const building = page.getByRole("button", { name: messages.log.exporting, exact: true });
-  await expect(building).toBeVisible();
-  await expect(building).toBeDisabled();
-  await expect(jsonControl(page)).toHaveCount(0);
-  await expect(ankiControl(page)).toBeEnabled();
+  await (await inMenu(page, jsonControl(page))).click();
+  await expect(page.getByText(messages.log.exporting, { exact: true })).toBeVisible();
+  await expect(await inMenu(page, jsonControl(page))).toBeDisabled();
+  await expect(await inMenu(page, ankiControl(page))).toBeEnabled();
 
+  await page.keyboard.press("Escape");
   await page.evaluate(() => ((window as unknown as { __hold: boolean }).__hold = false));
   await downloadPromise;
-  await expect(jsonControl(page)).toBeEnabled();
+  await expect(await inMenu(page, jsonControl(page))).toBeEnabled();
 });
 
 // ---------------------------------------------------------------------------
@@ -927,9 +935,9 @@ test("RL-76: with no pending row, no waiting line shows", async ({ page }) => {
 
 test("RL-76: only waiting words offer no Anki file and the line says they wait", async ({ page }) => {
   await openRows(page, [pendingRow("zzorble", NOW - 10)]);
-  await expect(page.getByText(PENDING_ONE, { exact: true })).toBeVisible();
-  await expect(ankiControl(page)).toHaveCount(0);
-  await expect(jsonControl(page)).toBeVisible();
+  await expect(await inMenu(page, page.getByText(PENDING_ONE, { exact: true }))).toBeVisible();
+  await expect(await inMenu(page, ankiControl(page))).toHaveCount(0);
+  await expect(await inMenu(page, jsonControl(page))).toBeVisible();
   // They are not «sin traducción guardada»: the no-card line would say so wrongly.
   await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toHaveCount(0);
 });
@@ -951,12 +959,12 @@ test("RL-92: with the dictionary on the device the card is the app's: part of sp
   await deleteTranslator(page);
   // The box installs the dictionary on the device; the word is then seeded, as a lookup the record kept.
   await page.goto("/");
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("tree");
   await expect(page.getByRole("heading", { name: "tree", exact: true })).toBeVisible({ timeout: 15000 });
   await seedStudy(page, [studyRow("tree", "enarbolar, árbol, fuste", NOW + 1_000, { headword: "tree" })]);
   await page.goto("/registro");
-  await expect(jsonControl(page)).toBeVisible();
+  await expect(downloadMenu(page)).toBeVisible();
 
   const file = await downloadAnki(page);
   const card = file.text.split("\n").find((line) => line.startsWith('"tree",'));

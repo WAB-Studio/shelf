@@ -32,3 +32,22 @@
   letter-spacing: 0.02em;
   color: var(--rl-muted);
 }
+
+/* The main search field: 52px, the raised ground, 17px text. Doubled to outrank the size token. */
+.pill.pill {
+  min-height: 52px;
+  background: var(--rl-raised);
+  font-size: 17px;
+}
+
+.pill.pill :global(.rt-TextFieldInput) {
+  min-height: 52px;
+  font-size: 17px;
+}
+
+/* A list's filter: 420px, never wider than its row. Doubled to outrank the root's own width. */
+.filter.filter {
+  width: 420px;
+  max-width: 100%;
+}
+

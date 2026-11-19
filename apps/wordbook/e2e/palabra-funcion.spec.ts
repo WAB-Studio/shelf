@@ -21,7 +21,7 @@ const OPEN_LABEL = messages.search.noEntry.hideDictionary;
 const DICTIONARY_LEAD: Record<string, string> = {
   it: "tecnología de la información",
   would: "por favor",
-  will: "ir a, desear, anhelar",
+  will: "ir a · desear, anhelar",
   something: "basurita",
 };
 
@@ -39,7 +39,7 @@ async function openReady(page: Page): Promise<void> {
   await assetResponse;
 }
 
-const searchBox = (page: Page) => page.getByRole("textbox", { name: messages.search.label });
+const searchBox = (page: Page) => page.getByRole("combobox", { name: messages.search.label });
 
 function visible(page: Page, text: string, exact = true): Locator {
   return page.locator("main").getByText(text, { exact }).locator("visible=true");

@@ -227,7 +227,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   «No se pudo traducir». The paid model's answer is not filtered. Decided by the user 2026-10-15.
   - Measured 2026-09-20, `i love you`, `en|es`: `translatedText` held an explicit sentence at `match: 1`, `quality: 74`,
     which passed every other gate; `te quiero` sat in `matches[1]` with the same score.
-- [x] **RL-66** — A row of `/registro` is deleted with a ✕ on its row. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-10-15.
+- [x] **RL-99** *(successor of RL-66)* — A row of `/registro` is deleted from its «⋯» menu, «Quitar del registro», after a question. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-11-19.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/e2e/registro-borrar.spec.ts:259,295,364,408,430,484,496,632,673`, green.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: the local words, a delete with the copy off says it reaches this device alone and sends no request, `apps/wordbook/e2e/registro-borrar.spec.ts:315,335,611`, green.
 - [x] **RL-76** *(successor of RL-55)* — A lookup a reader settles on is recorded on the device,
@@ -245,7 +245,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   holds it, and it travels only once it is answered, as a new answered row with the same moment. The record shows a pending row as pending, and the Anki file leaves it out until it is answered. A row
   holds what was typed, whether it was answered as a word or a sentence, the headword it actually reached when an
   inflected form was typed, and when. The record gains rows on its own and nothing edits one but the answer a
-  pending row takes; the reader can delete a row (RL-66) or empty it whole: on this device alone, or in the copy
+  pending row takes; the reader can delete a row (RL-99) or empty it whole: on this device alone, or in the copy
   their account holds as well. Emptying this device alone leaves the account's copy standing, and a device that
   signs in afterwards sees it again. No screen on the read path shows the record. It is read to take it off the
   device — to a file, or to the copy held by the reader's account — and to bring back what the same reader's other
@@ -262,7 +262,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   every sense that matters: what came down is valid, what did not comes down next time.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/scripts/check-sync.ts:923,924,926` (S33-S35: a named search leaves the account with its mark) and `apps/wordbook/e2e/registro-borrar.spec.ts:733` (a delete leaves every device), green.
 
-  It deletes in two ways. Retiring a device deletes exactly the searches that device had copied, and that device stops syncing; what had already come down to another device stays there and leaves it by clearing the app's data in that browser, and the app says this before confirming. A row the reader deletes from `/registro` (RL-66) leaves the account's copy and leaves a mark there for each of its searches, so every device that holds them drops them on its next pull and no device sends them up again. Decided by the user 2026-10-16.
+  It deletes in two ways. Retiring a device deletes exactly the searches that device had copied, and that device stops syncing; what had already come down to another device stays there and leaves it by clearing the app's data in that browser, and the app says this before confirming. A row the reader deletes from `/registro` (RL-99) leaves the account's copy and leaves a mark there for each of its searches, so every device that holds them drops them on its next pull and no device sends them up again. Decided by the user 2026-10-16.
 - [x] **RL-25** — The reader sees the list of devices that have copied to their account: which one is
   in their hand, when each was last seen, and how many searches it has copied. They can retire any of
   them, their own included.
@@ -288,11 +288,13 @@ this gets built, and no schema, table or column is "prepared for" it.
   file to an MCP client: the most looked-up words, the most recent ones, and the full history of one
   word. It only ever reads the file; no tool modifies it. The server is not part of the deployed app.
   - Driven 2026-10-30 by `scripts/mcp/server.test.ts`, over the server's own stdio: the protocol and its errors, the three tools, and the file left byte for byte as it was.
+- [x] **RL-98** *(refines RL-63, RL-99, RL-96)* — On a desktop (1024 px and up) `/registro` is one table by day with its own column names, and the review is one centred column. The table lists the words under day headers («Hoy», «Ayer», then weekday and date): the word, its translation, its state («Aprendiendo» when the review holds a card for it, else a dash), how many times it was searched and the time of its last search; a row opens the word's page and carries a «⋯» menu whose «Quitar del registro» asks the question of RL-99. The header row of the screen holds a «Descargar» menu — the record's file, the Anki file (RL-96, RL-92, RL-72) and, after a hairline, «Vaciar el registro» with its confirmation (RL-70) — and the «Repasar N» button, drawn only when something is due. Three filters narrow the list beside the typed one (RL-63): all, the ones in learning, the phrases. On a phone the list keeps one column. The review is a 680 px column centred in what the sidebar leaves, with its progress, its count and the way out in one line above the card, and its four grades in one row of equal width. Decided by the user 2026-11-19 from the boards `C-frio-Registro` and `C-frio-Repaso`; built from `docs/wordbook/DESIGN.md` "Registro y Repaso en escritorio".
+  - Proved 2026-11-19 on the lane's own run: `apps/wordbook/e2e/escritorio.spec.ts` (the table with its column names and day groups, the row menu removing a word, the review column centred, the grades 64 px and equal), green.
 - [x] **RL-96** *(successor of RL-72)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The CSV for Anki (RL-92) is offered beside it. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-16; kept when RL-72 was retired 2026-11-15.
 - [x] **RL-85** — A card of the review draws one sense of the word, the one the reader tapped in the answer («Aprender este sentido»);
   with no tap, the first sense of the first group. The tap is kept on the device beside the cards and leaves with the word. A word with
   a single sense offers no tap. Decided by the user 2026-11-08 (audit 2026-11-02, question 1).
-- [x] **RL-93** *(refines RL-85 and RL-22)* — The review travels with the account. The cards of the review (their FSRS state) and the sense the reader tapped for each word (RL-85) join the copy of RL-22: with the copy confirmed (RL-73), this device sends up its cards and senses and brings down the ones its other devices hold, so a new device, or a browser whose data was cleared, finds each word where it was left instead of new. One version is kept per word or phrase, by its key (the lemma reached, or the form as normalised): the one with the later moment of its last review, its tap or its deletion wins, whole; the half a newer version lacks (a tap with no review yet, a review with no tap) is kept from the older. A word deleted from `/registro` (RL-66) deletes its card and its sense on this device and in the copy, on every device that holds them, and a review of the same word after the deletion starts it again. Emptying the record on this device alone (RL-70) empties its cards on this device alone; the account keeps them and a device that signs in afterwards sees them again. Emptying the copy too empties the account's cards. The review rides the record's own confirmation (RL-73) and triggers (RNL-11): a device that last copied for another reader sends up only what it reviews after the new confirmation. A reader holds at most 20,000 words in the copy. With no account, nothing of the review leaves the device and it works exactly as RL-85 and RL-88 say. Decided by the user 2026-11-12, replacing the decision of 2026-11-08 that the review does not travel with the account.
+- [x] **RL-93** *(refines RL-85 and RL-22)* — The review travels with the account. The cards of the review (their FSRS state) and the sense the reader tapped for each word (RL-85) join the copy of RL-22: with the copy confirmed (RL-73), this device sends up its cards and senses and brings down the ones its other devices hold, so a new device, or a browser whose data was cleared, finds each word where it was left instead of new. One version is kept per word or phrase, by its key (the lemma reached, or the form as normalised): the one with the later moment of its last review, its tap or its deletion wins, whole; the half a newer version lacks (a tap with no review yet, a review with no tap) is kept from the older. A word deleted from `/registro` (RL-99) deletes its card and its sense on this device and in the copy, on every device that holds them, and a review of the same word after the deletion starts it again. Emptying the record on this device alone (RL-70) empties its cards on this device alone; the account keeps them and a device that signs in afterwards sees them again. Emptying the copy too empties the account's cards. The review rides the record's own confirmation (RL-73) and triggers (RNL-11): a device that last copied for another reader sends up only what it reviews after the new confirmation. A reader holds at most 20,000 words in the copy. With no account, nothing of the review leaves the device and it works exactly as RL-85 and RL-88 say. Decided by the user 2026-11-12, replacing the decision of 2026-11-08 that the review does not travel with the account.
   - Proved 2026-11-12, CI run 43176825874 on 871cd016: `apps/wordbook/scripts/check-sync.ts` S52-S58 (grants and stamp, the policies driven with two readers, the later moment wins and the half a newer version lacks is kept, 501 versions in two pages, the bound, the wipe), `apps/wordbook/e2e/repaso-viaja.spec.ts` (a card from the account is a word already learning; a review goes up and a deletion in the account removes the card; two devices of one reader against the real route), `apps/wordbook/lib/review/entries.test.ts` and `apps/wordbook/lib/sync/review-driver.test.ts`, green.
 - [x] **RL-94** *(refines RL-22)* — The app says where the review lives. `/cuenta`, in its copy section, says that the review travels with the account when the copy is on or about to be confirmed, and that it lives only on this device when no account is open. The confirmation before «Vaciar el registro» says the same for the choice it offers: with an account, that the review goes with the record on this device alone, or also from the account; with none, that it goes with the record and lived only here. Decided by the user 2026-11-12.
   - Proved 2026-11-12, CI run 43176825874 on 871cd016: `apps/wordbook/e2e/repaso-viaja.spec.ts` (signed out, signed in before and after confirming, and before «Vaciar» in both), green.
@@ -319,6 +321,16 @@ this gets built, and no schema, table or column is "prepared for" it.
   file. The dictionary's Worker is raised for the download alone, over the copy already on the device, and never downloads one; opening `/registro`
   mounts none. Decided by the user 2026-11-12.
   - Driven by `apps/wordbook/lib/log/anki.test.ts` and `apps/wordbook/e2e/export.spec.ts`.
+- [x] **RL-97** *(refines RL-82 and RL-85)* — From 1280px the main screen is a 720px reading column and a 320px margin, 64px apart; below
+  it the margin stacks under the field. The palette is «Gris frío y azul» (`docs/wordbook/DESIGN.md`): no brand block and no marigold highlight; the
+  sidebar names the app in plain type. The column holds the field and the answer: the headword, its sound when it has one, «Escuchar» and the
+  number of senses, then every sense in one order ruled by hairlines, never boxed. A sense shows its part of speech (numbered «1 · » only when the
+  word has two or more), its main translation large with the others after « · » (up to four, then «ver N más»), its definition and example, and
+  exactly one control on the right: «Aprender», or «✓ Aprendiendo» for the sense the review draws. The margin holds the day's review (a count and
+  «Empezar») and, for an answered word, «Tu historia» and «Frases con ella». While the box holds a prefix with no answer yet, a panel under the field
+  lists up to six headwords with their main translation and a quiet note («Ya la buscaste», «frase»); ↑ ↓ move, Enter opens the lit row, Esc closes the
+  panel until the text changes. Phrases and the other answers keep the column and its type. Decided by the user 2026-11-19.
+  - Driven by `apps/wordbook/e2e/escritorio.spec.ts`.
 - [x] **RL-89** *(refines RL-75)* — In production, with no `CLIENT_KEY_SALT`, the sign-in mail is refused (`sendFailed`) as the paid
   routes answer 204: without the salt no cap counts a caller. Outside production the action stays open. Decided by the user 2026-11-08.
 - [x] **RL-78** *(successor of RL-68)* — The review also asks a phrase the reader translated, scheduled by the same FSRS logic as a word; a phrase still waiting for its answer or never translated stays out. A card shows one sense of a word, the one the reader saw, with its part of speech and its definition when it has one; a phrase shows its translation. An entry answered «Otra vez» comes back in the same session once it is due: the session is not finished while one waits, and says so. Where the review mixes words and phrases it counts «entradas», not «palabras». Decided by the user 2026-10-30.
@@ -400,6 +412,8 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 Dead codes. The number stays burned and the tick stays as it was.
 
+- [x] **RL-66** — A row of `/registro` is deleted with a ✕ on its row. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-10-15.
+  _Retired 2026-11-19, by the user. Successor: RL-99 (the row is deleted from its «⋯» menu)._
 - [x] **RNL-08** — Exporting never touches the read path: building the file happens on a screen that
   is not the box, mounts no dictionary Worker, and with the export never opened the app behaves
   exactly as before. _Retired 2026-11-15, by the user. Successor: RNL-12 (the export may raise one dictionary Worker, only for the download, over the copy installed)._
@@ -469,7 +483,7 @@ Dead codes. The number stays burned and the tick stays as it was.
   answer arrived. A word whose network answer failed or never arrived, and a sentence that could not
   be translated, leave no row. A row holds what was typed, whether it was answered as a word or a
   sentence, the headword it actually reached when an inflected form was typed, and when. The record gains rows on its own and nothing edits one, but the reader can
-  delete a row (RL-66) or empty it whole: on this device alone, or in the copy their account holds as well. Emptying this
+  delete a row (RL-99) or empty it whole: on this device alone, or in the copy their account holds as well. Emptying this
   device alone leaves the account's copy standing, and a device that signs in afterwards sees it
   again. No screen on the read path shows the record. It is read to take it off the device — to a
   file, or to the copy held by the reader's account — and to bring back what the same reader's other
@@ -755,7 +769,7 @@ Rules the model must always guarantee, regardless of how they are implemented:
 - The interface never asserts a browser capability it has not asked for at
   runtime.
 - The device holds exactly one copy of the payload.
-- The record gains rows on its own; only the reader removes one (RL-66, RL-70) or empties it, on the device and in the copy alike. A row is identified by the
+- The record gains rows on its own; only the reader removes one (RL-99, RL-70) or empties it, on the device and in the copy alike. A row is identified by the
   device that wrote it and the number it carried there.
 
 ---

@@ -32,7 +32,7 @@ test("typing a word letter by letter asks the paid text route exactly once", asy
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
   await freezeTimers(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.click();
   await box.pressSequentially("accountant", { delay: KEYSTROKE_MS });
   await runClock(page, PHRASE_DEBOUNCE_MS);

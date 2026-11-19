@@ -56,6 +56,8 @@ Light, the same design inverted:
 - The main screen holds one dark brand block (`BrandBlock`): the name with «Book» on the highlight, a line, the search box.
 - Radix scale is `green`, not `indigo`; `theme.css` overrides its steps with the tokens below.
 
+_Superseded 2026-11-19 by «Gris frío y azul» below: the colour table here, the brand block and the marigold highlight no longer apply; the type, the pill shape and the rest stand._
+
 | role | value | ratio |
 |---|---|---|
 | accent, light | `#0C5A43` | 7.73 on `#FAF8F2`, 8.21 on `#FFFFFF` |
@@ -1947,15 +1949,20 @@ and width). RL-76 decided by the user 2026-10-18.
   pruning. The payload version is 3, so an installed copy refreshes.
 - **Examples.** The example of a word is the reader's own logged phrases containing it: free and offline. No paid generation.
 - **Review on the phone.** A card with the figure on the main screen (`ReviewCard`); the bar keeps three sections.
+  _Superseded 2026-11-19: the main screen's review is a pill in the margin (`ReviewRow`), not a card; `ReviewCard` is deleted._
 - **Desktop.** From 1280px a screen is two panels (`Panels`): the entry on the left, a sticky «Tu historia con esta palabra» on the
   right (380px, in a 1120px whole). This replaces the 620px measure rule for the main screen, a word's history and `/cuenta`.
+  _Superseded 2026-11-19 for the main screen: a 720px column and a 320px margin, no card (RL-97)._
 - **The entry.** The headword is Fraunces 48 to 64 with its sound, the voice and an index of its parts of speech on one line; the main
   translation is Fraunces 30, the rest smaller; «Traducciones» heads the entry once; the example sits inside its sense with the
   word on the marigold (`Highlight`); senses a reader meets seldom fold behind one line.
+  _Superseded 2026-11-19: every sense is its own row with its part of speech, no index line, the example on the soft accent, not the marigold (RL-97)._
 - **The green band** is the main screen's brand block alone, whose headline is one sentence with its key word on the marigold. Every
   other screen titles in Fraunces 40 in ink on the ground (`PageTitle`).
+  _Superseded 2026-11-19: there is no band, no brand block and no marigold._
 - **Main screen.** «N para repasar hoy» is a figure card at every width; the recent words are a mosaic of tiles, each with its main
   translation.
+  _Superseded 2026-11-19: «N para repasar hoy · Empezar» is a pill row in the margin._
 - **Review.** A flashcard of fixed proportion: the word centred, the reader's own phrase with a gap as the hint, a flip on reveal
   (none under `prefers-reduced-motion`), a progress bar, the four grades fixed at the foot of a phone, keys 1 to 4 on a desktop.
 - **`/registro`** is a diary by day («Hoy · 5», «Ayer · 4», «jueves, 29 oct · 2»), a compact row being the word and its main
@@ -2009,3 +2016,70 @@ Taken by the user: the review travels with the account (RL-93), replacing «no v
 - **The confirmation before «Vaciar el registro» carries one more line under its body** (RL-94): with an account, that the account keeps the review if the
   reader empties only this device and loses it if the account is emptied too; with none, that the review lives only here and goes with the record.
 - **No board was drawn.** Both are lines of copy in screens already approved.
+
+## Decisión 2026-11-19: Gris frío y azul, columna y margen
+
+Chosen by the user from boards (`C-frio`). Replaces «Verde botella»'s palette; Fraunces stays the one serif (Newsreader is not loaded, so the main translation is Fraunces 30/600 too).
+
+| role | light | dark |
+|---|---|---|
+| ground | `#F7F8F9` | `#121418` |
+| raised | `#FFFFFF` | `#1A1D23` |
+| line | `#E3E6EA` | `#262A31` |
+| border | `#D7DBE0` | `#2E333B` |
+| ink | `#15181D` | `#E9ECF1` |
+| ink, secondary | `#343A42` | `#D5DAE1` |
+| muted | `#5F6670` | `#959CA7` |
+| muted, quietest | `#737A84` | `#858C97` |
+| sidebar | `#EFF1F4` | `#15181C` |
+| accent | `#2D5BA8` | `#8DB4F2` |
+| accent soft | `#E6EDF8` | `#1E2A3E` |
+| text on accent | `#FFFFFF` | `#0F1A2C` |
+
+- The Radix scale is `blue`; `app/theme.css` maps its steps to these tokens. The search field's edge stays a 3:1 grey (`--rl-control-edge`), not the hairline border.
+- No marigold, no dark block: the wordmark is plain «WordBook» in Fraunces 700. A marked word in a phrase sits on the soft accent.
+- **Sidebar (from 1024px).** 240px on the sidebar colour with a right hairline; the wordmark, then Buscar / Registro / Cuenta as text; the current one on the raised colour with `inset 3px 0 0` accent; the theme choice quiet at the foot. The phone keeps its bottom bar.
+- **Buscar (from 1280px).** A grid of a 720px reading column and a 320px margin, 64px apart. Row 1: the field (pill, 52px, raised, border, ✕ to clear) and, in the margin, «N para repasar hoy · Empezar» (a quiet line when nothing is due). Below the field: the headword (Fraunces 60/700), a line with the IPA (omitted when null: 43% of entries have none), «Escuchar» and «N sentidos»; then every sense in one order, ruled by hairlines, no cards.
+- **A sense.** The label in 11px/600/0.12em uppercase accent, prefixed «1 · » only with two or more senses; the main translation large (30/600) and the others after « · » in muted 21px, «ver N más» only past four; the definition and the example in muted type; one button on the right: «Aprender» outline, or «✓ Aprendiendo» on the accent soft. The one-sense case (median) is the one designed first.
+- **The margin** holds, ruled by hairlines, «Tu historia» (times searched, first date, learning state, «Repasar ahora») and «Frases con ella». Phrases and the other answers (no entry, AI answer, failure) stay in the column with the same type.
+- **Suggestions.** A panel under the field: raised, border, radius 18, soft shadow; rows «word translation» with a quiet note on the right («Ya la buscaste», «frase»); the lit row on the sidebar colour; the foot «↑ ↓ para elegir · Enter para abrir» and «Esc para cerrar». Part B (Registro, Repaso) follows in its own decision.
+
+## Registro y Repaso en escritorio (2026-11-19)
+
+Taken from the boards `C-frio-Registro` and `C-frio-Repaso`, picked by the user. From 1024 px; the phone keeps its single column.
+Every colour is a token (`--rl-*`); the palette of the same day changes the hexes, never these rules.
+
+### Registro: one table, by day
+
+- **The header row.** The title (Fraunces 40/700) at the left; at the right «Descargar ▾» and the primary «Repasar N» (N = what is due today;
+  hidden when nothing is due). «Descargar ▾» is a menu: «Descargar el registro», «Descargar para Anki», a hairline, «Vaciar el registro».
+  The wipe keeps its confirmation, which opens under the header. When the record is empty the menu is not drawn. The Anki item is not
+  drawn when no card can be made; a line in the menu says why (RL-72). What a download reports sits under the button.
+- **The second row.** The filter field, a 420 px pill whose label is read by a screen reader and not drawn, then «Todas · N»,
+  «Aprendiendo · N», «Frases · N». The three read the record already in memory: a word is «Aprendiendo» when the review holds a card
+  for it, a phrase is one the reader translated.
+- **The table.** One column, at most 1100 px, under the filter. A header row of 11 px / 600 / uppercase labels: Palabra, Traducción, Estado,
+  Veces, Hora. Days are rows of the same table: «Hoy · 3», «Ayer · 4», then weekday and date. A row is 52 px with a hairline above:
+  headword (Fraunces 18/700, truncates), translation (Fraunces 18, secondary ink, truncates), state («Aprendiendo» in the accent, or «—»),
+  searches (tabular, right), the time of the last search (tabular, right) and a «⋯» menu holding «Quitar del registro».
+  Columns: 300 px · 1fr · 140 px · 80 px · 90 px · 44 px, 16 px apart.
+- **The row opens the word** through the link on its headword, stretched over the line; the menu stays beside it, never inside it.
+- **What the row no longer carries.** The «1 VEZ» chip, the per-row ✕, and the two figures over the list («9 búsquedas», «9 palabras»);
+  the count of searches is the Veces column, the count of words is «Todas · N». The «Descargas» card is gone.
+- **A row that waits for its answer** (RL-76) says «Sin respuesta todavía» in the translation cell and its explanation under the line.
+  A row of several forms lists them under the line. A question (delete) opens under the line, full width.
+- **On a phone** the table is a list: headword over its translation, the menu at the right and Veces beside it; Estado and Hora are not drawn and the
+  header row is not either.
+
+### Repaso: one centred column
+
+- A 680 px column centred in what the sidebar leaves (not in the viewport). Header line: «Repaso» (Fraunces 32), the progress bar,
+  «3 de 9», a quiet «Salir» to the record.
+- The card: raised, a hairline, radius 22, everything centred, 56 / 48 px of air, at least 360 px tall. From the top: the kind note
+  («Palabra nueva», 13 px, quietest), the headword, after the reveal a short rule, the part of speech in the accent, the translation, the
+  definition in secondary ink.
+- The four grades in one row of equal width, 64 px tall, radius 16: the name, and under it «key · interval». The suggested one («Bien») is
+  filled with the accent. Under them, the hint «Teclado: Espacio muestra la respuesta · 1 a 4 califica». On a phone the grades stay in the
+  bar above the bottom nav, without the key.
+- The review logic is unchanged: ts-fsrs, the keys 1 to 4, the focus that follows the reader.
+- **The suggestion's gloss.** The panel draws each candidate's main translation again: the one the entry itself opens with (RL-91's default sense, the order RL-97's lead line uses), so it reads «nombre» for `name`. This reverses the 2026-09-11 refusal of a raw first translation («ñame»), which no longer holds: senses are ordered inside a group.

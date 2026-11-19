@@ -37,7 +37,7 @@ test("a headword typed over by a longer one is never asked about, only the one t
   });
   await openReady(page);
 
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("cat");
   // The word is classified and painted: from here on its decoration timer runs.
   await expect(page.getByText("gato", { exact: false }).first()).toBeVisible();

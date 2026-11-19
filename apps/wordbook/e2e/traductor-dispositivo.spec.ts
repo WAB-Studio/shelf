@@ -95,7 +95,7 @@ test("RL-08: a translator the browser reports available translates the sentence 
   // The mount picks an available translator up on its own; wait until it has.
   await expect.poll(() => page.evaluate(() => window.__translatorCreates)).toBe(1);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(SENTENCE);
 
   await expect(page.getByText(`[en el dispositivo] ${SENTENCE}`)).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.phrase.originDevice)).toBeVisible();
@@ -114,7 +114,7 @@ test("RL-08: with the network off, the ready on-device translator still answers 
   await expect.poll(() => page.evaluate(() => window.__translatorCreates)).toBe(1);
   await context.setOffline(true);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(SENTENCE);
 
   await expect(page.getByText(`[en el dispositivo] ${SENTENCE}`)).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.phrase.originDevice)).toBeVisible();
@@ -130,7 +130,7 @@ test("RL-08: with the network off and a translator not ready, no translation sho
   await openReady(page);
   await context.setOffline(true);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(SENTENCE);
 
   await expect(page.getByText(`[en el dispositivo] ${SENTENCE}`)).toHaveCount(0);
   await expect(page.getByText(messages.phrase.originDevice)).toHaveCount(0);
@@ -146,7 +146,7 @@ test("RL-10: while the translator downloads the interface says so, shows its pro
   await stubNetwork(page);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(SENTENCE);
   await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible({ timeout: 5000 });
 
@@ -177,7 +177,7 @@ for (const state of ["downloadable", "downloading"] as const) {
     const network = await stubNetwork(page);
     await openReady(page);
 
-    await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+    await page.getByRole("combobox", { name: messages.search.label }).fill(SENTENCE);
 
     await expect(page.getByText("Traducción por red")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible();
@@ -194,7 +194,7 @@ for (const state of ["downloadable", "downloading"] as const) {
     await openReady(page);
     await context.setOffline(true);
 
-    await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+    await page.getByRole("combobox", { name: messages.search.label }).fill(SENTENCE);
 
     await expect(page.getByRole("heading", { name: "house" })).toBeVisible({ timeout: 5000 });
     await expect(page.getByText(messages.phrase.originDevice)).toHaveCount(0);
@@ -208,7 +208,7 @@ test("RL-08: online, a ready translator whose translate throws falls to the netw
   await openReady(page);
   await expect.poll(() => page.evaluate(() => window.__translatorCreates)).toBe(1);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(SENTENCE);
 
   await expect(page.getByText("Traducción por red")).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible();
@@ -226,7 +226,7 @@ test("RL-08: offline, a ready translator that throws leaves the breakdown, never
   await expect.poll(() => page.evaluate(() => window.__translatorCreates)).toBe(1);
   await context.setOffline(true);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(SENTENCE);
 
   await expect(page.getByRole("heading", { name: "house" })).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.phrase.originDevice)).toHaveCount(0);
@@ -243,7 +243,7 @@ test("RL-08: a second search replaces a sentence the device is still translating
   await openReady(page);
   await expect.poll(() => page.evaluate(() => window.__translatorCreates)).toBe(1);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("I left my first house yesterday");
   await expect.poll(() => page.evaluate(() => window.__firstStarted)).toBe(true);
   await searchBox.fill("We drove to the coast together");

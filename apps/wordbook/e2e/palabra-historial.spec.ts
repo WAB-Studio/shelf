@@ -130,7 +130,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // bound, so those assertions below stay on plain `getByText`.
 function glossLocator(page: Page, gloss: string): Locator {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, )${escaped}(,|$)`));
+  return page.getByText(new RegExp(`(^|, |· )${escaped}(,|$)`));
 }
 
 test("a word's history lists every one of its searches with its date, and no other word leaks in", async ({
@@ -360,7 +360,7 @@ test("a word never searched keeps its own empty copy even when the record holds 
     .click();
   await expect(page).toHaveURL(/\/\?q=zzqqxv$/);
   await expect(
-    page.getByRole("textbox", { name: messages.search.label }),
+    page.getByRole("combobox", { name: messages.search.label }),
   ).toHaveValue("zzqqxv");
 });
 
@@ -542,7 +542,7 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   // verb sense's two glosses joined (docs/wordbook/DESIGN.md "The
   // translations are one line, separated by commas").
   await expect(
-    page.getByText("irse a la cama, encamarse", { exact: true }),
+    page.getByText("irse a la cama · encamarse", { exact: true }),
   ).toBeVisible();
   // The one heading on the page is the word itself: `SenseList`'s own copy
   // of "bed" stays suppressed, or this locator would be ambiguous.
@@ -565,7 +565,7 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   await expect(glossLocator(page, "lecho")).toBeVisible();
   await expect(glossLocator(page, "encamarse")).toBeVisible();
   await expect(
-    page.getByText("irse a la cama, encamarse", { exact: true }),
+    page.getByText("irse a la cama · encamarse", { exact: true }),
   ).toBeVisible();
 });
 

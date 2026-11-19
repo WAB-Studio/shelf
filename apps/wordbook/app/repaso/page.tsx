@@ -1,16 +1,12 @@
-import { getTranslations } from "next-intl/server";
-
 import { ReviewSession } from "@/components/review/review-session";
-import { PageTitle, Page, Panels } from "@/components/ui";
+import { Page } from "@/components/ui";
 
 // RL-68: the review reads the record and its cards off the device alone, so the server draws the shell.
-export default async function ReviewPage() {
-  const t = await getTranslations("review");
+// The title is the session's own: it shares its line with the progress.
+export default function ReviewPage() {
   return (
-    <Page measure="panels">
-      <Panels top={<PageTitle>{t("title")}</PageTitle>}>
-        <ReviewSession />
-      </Panels>
+    <Page measure="session">
+      <ReviewSession />
     </Page>
   );
 }

@@ -8,3 +8,8 @@
   color: var(--rl-ink);
   overflow-wrap: anywhere;
 }
+
+/* The session screens' own title, a step under the 40px of a list. */
+.compact.compact {
+  font-size: 32px;
+}

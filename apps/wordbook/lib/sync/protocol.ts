@@ -25,7 +25,7 @@ const MAX_INT2 = 32_767;
 // Largest epoch-ms a JavaScript `Date` holds; past it `toISOString` throws.
 const MAX_EPOCH_MS = 8_640_000_000_000_000;
 
-// A search the reader deleted (RL-66), named by the identity its row carries.
+// A search the reader deleted (RL-99), named by the identity its row carries.
 // Up, it asks the account to delete that row and refuse its return; down, it
 // tells another device to delete its own copy (RL-70).
 export const tombstoneSchema = z.object({ deviceId: z.uuid(), localId: z.int().positive().max(MAX_INT4) });

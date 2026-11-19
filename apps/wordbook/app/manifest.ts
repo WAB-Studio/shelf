@@ -13,11 +13,10 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     description: t("description"),
     start_url: "/",
     display: "standalone",
-    // Matches app/theme.css: dark is the primary look (docs/wordbook/DESIGN.md
-    // "Tokens"), so the launch splash and the status bar read the same warm
-    // near-black ground and terracotta accent as the app itself.
-    background_color: "#14130f",
-    theme_color: "#0a3d2e",
+    // Matches app/theme.css (docs/wordbook/DESIGN.md «Gris frío y azul»): the launch splash reads the
+    // dark ground and the status bar the blue accent, as the app itself does.
+    background_color: "#121418",
+    theme_color: "#2d5ba8",
     lang: "es",
     icons: [
       {

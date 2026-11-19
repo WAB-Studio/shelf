@@ -17,11 +17,7 @@ export { AppTheme } from "./theme";
 
 export { Box } from "./box";
 
-export { BrandBlock } from "./brand-block";
-
 export { Card } from "./card";
-
-export { Figure } from "./figure";
 
 export { PageTitle } from "./page-title";
 
@@ -32,6 +28,12 @@ export { MarkedWord } from "./marked-word";
 export { Wordmark } from "./wordmark";
 
 export { Separator } from "./separator";
+
+export { Menu } from "./menu";
+
+export { Segments } from "./segments";
+
+export { Table } from "./table";
 
 export { Page } from "./page";
 
@@ -62,3 +64,9 @@ export { PosLabel } from "./label";
 export { MetaLabel } from "./meta-label";
 
 export { Live } from "./live";
+
+export { SuggestPanel, suggestOptionId, type SuggestRow } from "./suggest-panel";
+
+export { SenseRow } from "./sense-row";
+
+export { PillRow } from "./pill-row";
