@@ -132,6 +132,7 @@
 .tone_games { --tone: var(--tl-tone-games); --tone-block: var(--tl-tone-games-on-block); }
 .tone_social { --tone: var(--tl-tone-social); --tone-block: var(--tl-tone-social-on-block); }
 .tone_shopping { --tone: var(--tl-tone-shopping); --tone-block: var(--tl-tone-shopping-on-block); }
+.tone_study { --tone: var(--tl-tone-study); --tone-block: var(--tl-tone-study-on-block); }
 .tone_system { --tone: var(--tl-tone-system); --tone-block: var(--tl-tone-system-on-block); }
 .tone_other { --tone: var(--tl-tone-other); --tone-block: var(--tl-tone-other-on-block); }
 .tone_claude { --tone: var(--tl-tone-claude); --tone-block: var(--tl-tone-claude-on-block); }

@@ -1,7 +1,7 @@
 import { appClass, appTone, mainSiteClass, type AppClass } from "@/lib/app-classes";
 import { appName } from "@/lib/app-names";
 import { claudeScreen } from "@/lib/daily";
-import type { ClaudeDay, DayApp, SiteTime } from "@/lib/queries";
+import type { ClaudeDay, DayApp, PageTime, SiteTime } from "@/lib/queries";
 
 export const HEAT_LEVELS = 4;
 
@@ -28,9 +28,9 @@ export function claudeHeatRow(claude: ClaudeDay[], days: string[], largest: numb
 
 // The week as a grid: the `top` apps of the week by total, a cell per day. An app is its readable name (two processes
 // with one name add up, Windows' own noise is `systemName`). A cell's level, 1 to 4, is its share of the largest cell
-// in the grid; a day with nothing is level 0. A browser's row is classed by the main class of the week's `sites` (RT-28).
-export function buildHeatmap(rows: DayApp[], days: string[], systemName: string, top: number, sites: SiteTime[] = []): Heatmap {
-  const browserKind = mainSiteClass(sites);
+// in the grid; a day with nothing is level 0. A browser's row is classed by the main class of the week's `sites` and `pages` (RT-28, RT-31).
+export function buildHeatmap(rows: DayApp[], days: string[], systemName: string, top: number, sites: SiteTime[] = [], pages: PageTime[] = []): Heatmap {
+  const browserKind = mainSiteClass(sites, pages);
   const kindOf = (app: string): AppClass => {
     const tone = appTone(app, systemName, browserKind);
     return tone === "claudeApp" ? appClass(app, systemName) : tone;

@@ -73,8 +73,8 @@ export async function DayView({ day }: { day: string }) {
   const total = sum(apps);
   const top = apps[0];
   const tSystem = words.system;
-  const browserKind = mainSiteClass(sites);
-  const classes = timeByClass(apps, sites, tSystem);
+  const browserKind = mainSiteClass(sites, pages);
+  const classes = timeByClass(apps, sites, tSystem, pages);
   const previousTotal = previous[0]?.seconds ?? 0;
   const delta = total - previousTotal;
   const date = t("title", { weekday: words.weekday(day), day: words.dayOfMonth(day), month: words.month(day) });

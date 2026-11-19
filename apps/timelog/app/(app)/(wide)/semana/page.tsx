@@ -9,7 +9,7 @@ import { claudeWeekHint } from "@/lib/daily";
 import { appTone, mainSiteClass } from "@/lib/app-classes";
 import { buildHeatmap, claudeHeatRow } from "@/lib/heatmap";
 import { withTimeDb } from "@/lib/session";
-import { appsByDay, claudeBetween, dayTotals, editorWindowsBetween, sitesBetween, uploadSpan } from "@/lib/queries";
+import { appsByDay, claudeBetween, dayTotals, editorWindowsBetween, pagesBetween, sitesBetween, uploadSpan } from "@/lib/queries";
 import { fill, sum } from "@/lib/totals";
 import { projectsOf } from "@/lib/vscode-project";
 import { askedWeek, clampWeek, weekSteps } from "@/lib/week";
@@ -31,8 +31,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const { semana } = await searchParams;
   const asked = askedWeek(semana, today);
   const sunday = addDays(asked, 6);
-  const [[span, totals, byDay, claude, sites, windows], words, t, tClaude, tClass] = await Promise.all([
-    withTimeDb((tx) => Promise.all([uploadSpan(tx), dayTotals(asked, sunday, tx), appsByDay(asked, sunday, tx), claudeBetween(asked, sunday, tx), sitesBetween(asked, sunday, tx), editorWindowsBetween(asked, sunday, tx)])),
+  const [[span, totals, byDay, claude, sites, pages, windows], words, t, tClaude, tClass] = await Promise.all([
+    withTimeDb((tx) => Promise.all([uploadSpan(tx), dayTotals(asked, sunday, tx), appsByDay(asked, sunday, tx), claudeBetween(asked, sunday, tx), sitesBetween(asked, sunday, tx), pagesBetween(asked, sunday, tx), editorWindowsBetween(asked, sunday, tx)])),
     calendarWords(),
     getTranslations("time.week"),
     getTranslations("time.claude"),
@@ -43,8 +43,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const steps = weekSteps(monday, span.firstDay, today);
   const days = fill(monday, sunday, totals);
   const longestDay = Math.max(1, ...days.map((one) => one.seconds));
-  const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN, sites);
-  const browserKind = mainSiteClass(sites);
+  const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN, sites, pages);
+  const browserKind = mainSiteClass(sites, pages);
   const hint = claudeWeekHint(span);
   const projects = projectsOf(windows);
   const agentSeconds = claude.reduce((total, one) => total + one.code, 0);

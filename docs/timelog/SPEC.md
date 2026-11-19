@@ -109,6 +109,13 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   host with a subdomain taking its parent's rule. The browser time no site accounts for counts in Otras. The day's class
   strip and the week's heatmap use this split; the browser's own row stays in Apps, drawn in its sites' main class.
   Extends RT-04, RT-05 and RT-13. (2026-11-19, «si se ve bien»)
+- [ ] **RT-31** A tenth class, Estudio, joins RT-28's nine: the person's own study time. A page whose title names
+  studyAid («… · studyAid» or exactly «studyAid», any case) is Estudio whatever its host, so a host's seconds split by
+  its pages: the study pages' seconds (at most the host's) go to Estudio and the rest keep the host's class. These sites
+  are Estudio: wordbookapp.vercel.app (more specific than `*.vercel.app`, which stays Programar), duolingo.com,
+  ankiweb.net, coursera.org, udemy.com, platzi.com, khanacademy.org; the Anki app is too. The class strip, the legend
+  and the week's heatmap use it, with pages on both screens. A screen that has sites but no pages falls back to the
+  host's class. Extends RT-28. (2026-11-19, «con la nueva studyaid no tiene sentido contarla como programar»)
 
 ### Non-functional requirements
 
