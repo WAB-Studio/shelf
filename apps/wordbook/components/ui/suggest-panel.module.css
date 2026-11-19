@@ -3,17 +3,17 @@
   min-width: 0;
 }
 
-/* Raised, bordered, 18px radius, a soft shadow; under the field by its 52px plus 8px. */
+/* Raised, bordered, 18px radius, a soft shadow; 8px under the field. */
 .panel {
   position: absolute;
   inset-inline: 0;
-  top: 60px;
+  top: calc(100% + 8px);
   z-index: 3;
   overflow: hidden;
   background: var(--rl-raised);
   border: 1px solid var(--rl-border);
   border-radius: 18px;
-  box-shadow: 0 18px 40px rgb(21 24 29 / 10%);
+  box-shadow: var(--rl-shadow-float);
 }
 
 .rows {
@@ -60,7 +60,7 @@
 }
 
 .foot {
-  display: flex;
+  display: none;
   justify-content: space-between;
   gap: 16px;
   padding: 10px 20px;
@@ -69,9 +69,9 @@
   color: var(--rl-muted-quiet);
 }
 
-/* A phone has no arrow keys to name. */
-@media (max-width: 659px) {
+/* A phone has no arrow keys to name: the foot shows from the reading measure up. */
+@media (min-width: 660px) {
   .foot {
-    display: none;
+    display: flex;
   }
 }

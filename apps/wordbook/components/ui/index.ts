@@ -19,8 +19,6 @@ export { Box } from "./box";
 
 export { Card } from "./card";
 
-export { Figure } from "./figure";
-
 export { PageTitle } from "./page-title";
 
 export { Highlight } from "./highlight";

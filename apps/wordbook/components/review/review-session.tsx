@@ -464,7 +464,7 @@ export function ReviewSession() {
   return (
     <Frame progress={{ value: Math.round((done / total) * 100), label: t("progress", { current: repeat ? done : Math.min(done + 1, total), total }) }}>
       {state.missing !== null && <Text muted>{t("wordMissing", { word: state.missing })}</Text>}
-      <FlashCard centred face={revealedAt === null ? "front" : "back"}>
+      <FlashCard face={revealedAt === null ? "front" : "back"}>
         {(card === null || repeat) && (
           <Text size="2" muted="quietest">
             {repeat ? t("repeat") : t(isPhraseRow(row) ? "newPhrase" : "newWord")}

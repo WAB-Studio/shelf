@@ -29,6 +29,7 @@ body {
   --rl-ground: #f7f8f9;
   --rl-raised: #ffffff;
   --rl-sidebar: #eff1f4;
+  --rl-sidebar-width: 240px;
   --rl-line: #e3e6ea;
   --rl-border: #d7dbe0;
   /* The search field's edge: 3:1 on white where the hairline border is not (WCAG 1.4.11). */
@@ -51,6 +52,8 @@ body {
   --rl-tint-5: #c3d3ec;
   /* The soft card: a hairline and a low shadow. */
   --rl-shadow: 0 1px 2px rgb(21 24 29 / 6%), 0 6px 18px rgb(21 24 29 / 6%);
+  /* The panel that floats over the screen (the suggestions under the field). */
+  --rl-shadow-float: 0 18px 40px rgb(21 24 29 / 10%);
   /* Native controls, scrollbars and autofill follow the mode on screen. */
   color-scheme: light;
 }
@@ -76,6 +79,7 @@ body {
     --rl-tint-4: #26354e;
     --rl-tint-5: #2e4160;
     --rl-shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 6px 18px rgb(0 0 0 / 30%);
+    --rl-shadow-float: 0 18px 40px rgb(0 0 0 / 55%);
     color-scheme: dark;
   }
 }
@@ -101,6 +105,7 @@ body {
   --rl-tint-4: #26354e;
   --rl-tint-5: #2e4160;
   --rl-shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 6px 18px rgb(0 0 0 / 30%);
+  --rl-shadow-float: 0 18px 40px rgb(0 0 0 / 55%);
   color-scheme: dark;
 }
 

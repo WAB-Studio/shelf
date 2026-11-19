@@ -39,6 +39,13 @@
   min-width: 0;
 }
 
+/* The desktop's cells sit a gutter in from the table's edge; what hangs under the line follows them. */
+@media (min-width: 1024px) {
+  .extra {
+    padding-inline: var(--space-4);
+  }
+}
+
 .word {
   grid-area: word;
 }

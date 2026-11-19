@@ -33,6 +33,12 @@ export function splitTranslations(text: string): string[] {
 // The translations a reader sees before asking for the rest.
 export const TRANSLATIONS_SHOWN = 3;
 
+// The glosses an entry's own line draws: each without a trailing «...» or «…» the data may end it on,
+// none empty, none twice.
+export function cleanGlosses(items: readonly string[]): string[] {
+  return [...new Set(items.map((item) => item.replace(/\s*(\.{3}|…)$/, "").trim()).filter((item) => item !== ""))];
+}
+
 // The first `limit` (three by default), and how many wait behind «ver más».
 export function previewTranslations(
   items: readonly string[],

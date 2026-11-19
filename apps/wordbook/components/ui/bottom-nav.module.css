@@ -83,7 +83,7 @@
     inset-inline: 0 auto;
     inset-block: 0;
     box-sizing: border-box;
-    width: 240px;
+    width: var(--rl-sidebar-width);
     max-width: none;
     margin-inline: 0;
     flex-direction: column;

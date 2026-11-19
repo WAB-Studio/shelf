@@ -74,25 +74,24 @@
   .bar + .spacer {
     display: none;
   }
+
+  /* The card fills the column it is given instead of keeping its ratio. */
+  .card {
+    max-width: none;
+    aspect-ratio: auto;
+    border-radius: 22px;
+  }
+
+  .face {
+    min-height: 360px;
+    padding: 56px 48px;
+    gap: 12px;
+  }
 }
 
 @media (min-width: 700px) and (max-width: 1023px) {
   .bar {
     max-width: 620px;
     margin-inline: auto;
-  }
-}
-
-@media (min-width: 1024px) {
-  .card.centred {
-    max-width: none;
-    aspect-ratio: auto;
-    border-radius: 22px;
-  }
-
-  .centred .face {
-    min-height: 360px;
-    padding: 56px 48px;
-    gap: 12px;
   }
 }

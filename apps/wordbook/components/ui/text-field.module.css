@@ -45,12 +45,9 @@
   font-size: 17px;
 }
 
-/* The label a sighted reader does not need: still the input's name. */
-.hidden.hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+/* A list's filter: 420px, never wider than its row. Doubled to outrank the root's own width. */
+.filter.filter {
+  width: 420px;
+  max-width: 100%;
 }
+

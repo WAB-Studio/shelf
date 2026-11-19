@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { previewTranslations } from "@/lib/log/translation-line";
+import { cleanGlosses, previewTranslations, TRANSLATIONS_SHOWN } from "@/lib/log/translation-line";
 import { Flex, Link, TapTarget, Text } from "@/components/ui";
 
 // The entry's own line shows up to four translations before «ver N más».
@@ -25,13 +25,9 @@ export function TranslationList({
   centred?: boolean;
 }) {
   const t = useTranslations("word");
-  // The entry's line carries no trailing «...» or «…» a gloss may end on in the data, and no gloss twice.
-  const items = lead
-    ? [...new Set(rawItems.map((item) => item.replace(/\s*(\.{3}|…)$/, "").trim()).filter((item) => item !== ""))]
-    : rawItems;
+  const items = lead ? cleanGlosses(rawItems) : rawItems;
   const [open, setOpen] = useState(false);
-  const limit = lead ? LEAD_SHOWN : undefined;
-  const { shown, hidden } = previewTranslations(items, limit);
+  const { shown, hidden } = previewTranslations(items, lead ? LEAD_SHOWN : TRANSLATIONS_SHOWN);
   const line = open ? items : shown;
   const [first, ...rest] = line;
 

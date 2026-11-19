@@ -42,12 +42,13 @@ function Day({ children }: { children?: ReactNode }) {
   );
 }
 
-// `extra` hangs under the line at full width: a question, a failure, the lines of a row that waits.
+// `extra` hangs under the line at full width, indented as the cells are on the desktop: a question, a
+// failure, the lines of a row that waits.
 function Row({ extra, children }: { extra?: ReactNode; children?: ReactNode }) {
   return (
     <div role="row" className={styles.row}>
       <div className={styles.line}>{children}</div>
-      {extra}
+      {extra ? <div className={styles.extra}>{extra}</div> : null}
     </div>
   );
 }

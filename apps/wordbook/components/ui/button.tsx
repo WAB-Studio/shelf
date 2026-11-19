@@ -23,28 +23,14 @@ type BlockProp = {
   tall?: boolean;
 };
 
-function withTap(className: string | undefined): string {
-  return className ? `${styles.tap} ${className}` : styles.tap;
-}
-
-function withHeavy(heavy: boolean | undefined, className: string | undefined): string | undefined {
-  if (!heavy) return className;
-  return className ? `${styles.heavy} ${className}` : styles.heavy;
-}
-
-function withTall(tall: boolean | undefined, className: string | undefined): string | undefined {
-  if (!tall) return className;
-  return className ? `${styles.tall} ${className}` : styles.tall;
-}
-
-function withBlock(block: boolean | undefined, className: string | undefined): string | undefined {
-  if (!block) return className;
-  return className ? `${styles.block} ${className}` : styles.block;
+// The classes a primitive adds to the caller's own, joined once.
+function joined(...names: (string | false | undefined)[]): string {
+  return names.filter(Boolean).join(" ");
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps & BlockProp>(
   function Button({ block, heavy, tall, className, ...props }, ref) {
-    return <ThemesButton ref={ref} {...props} className={withTall(tall, withHeavy(heavy, withBlock(block, withTap(className))))} />;
+    return <ThemesButton ref={ref} {...props} className={joined(tall && styles.tall, heavy && styles.heavy, block && styles.block, styles.tap, className)} />;
   },
 );
 
@@ -56,7 +42,6 @@ type QuietProp = {
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps & QuietProp>(
   function IconButton({ quiet, className, ...props }, ref) {
-    const classes = quiet ? `${styles.quiet} ${withTap(className)}` : withTap(className);
-    return <ThemesIconButton ref={ref} {...props} className={classes} />;
+    return <ThemesIconButton ref={ref} {...props} className={joined(quiet && styles.quiet, styles.tap, className)} />;
   },
 );

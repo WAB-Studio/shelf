@@ -1949,15 +1949,20 @@ and width). RL-76 decided by the user 2026-10-18.
   pruning. The payload version is 3, so an installed copy refreshes.
 - **Examples.** The example of a word is the reader's own logged phrases containing it: free and offline. No paid generation.
 - **Review on the phone.** A card with the figure on the main screen (`ReviewCard`); the bar keeps three sections.
+  _Superseded 2026-11-19: the main screen's review is a pill in the margin (`ReviewRow`), not a card; `ReviewCard` is deleted._
 - **Desktop.** From 1280px a screen is two panels (`Panels`): the entry on the left, a sticky «Tu historia con esta palabra» on the
   right (380px, in a 1120px whole). This replaces the 620px measure rule for the main screen, a word's history and `/cuenta`.
+  _Superseded 2026-11-19 for the main screen: a 720px column and a 320px margin, no card (RL-97)._
 - **The entry.** The headword is Fraunces 48 to 64 with its sound, the voice and an index of its parts of speech on one line; the main
   translation is Fraunces 30, the rest smaller; «Traducciones» heads the entry once; the example sits inside its sense with the
   word on the marigold (`Highlight`); senses a reader meets seldom fold behind one line.
+  _Superseded 2026-11-19: every sense is its own row with its part of speech, no index line, the example on the soft accent, not the marigold (RL-97)._
 - **The green band** is the main screen's brand block alone, whose headline is one sentence with its key word on the marigold. Every
   other screen titles in Fraunces 40 in ink on the ground (`PageTitle`).
+  _Superseded 2026-11-19: there is no band, no brand block and no marigold._
 - **Main screen.** «N para repasar hoy» is a figure card at every width; the recent words are a mosaic of tiles, each with its main
   translation.
+  _Superseded 2026-11-19: «N para repasar hoy · Empezar» is a pill row in the margin._
 - **Review.** A flashcard of fixed proportion: the word centred, the reader's own phrase with a gap as the hint, a flip on reveal
   (none under `prefers-reduced-motion`), a progress bar, the four grades fixed at the foot of a phone, keys 1 to 4 on a desktop.
 - **`/registro`** is a diary by day («Hoy · 5», «Ayer · 4», «jueves, 29 oct · 2»), a compact row being the word and its main
@@ -2077,3 +2082,4 @@ Every colour is a token (`--rl-*`); the palette of the same day changes the hexe
   filled with the accent. Under them, the hint «Teclado: Espacio muestra la respuesta · 1 a 4 califica». On a phone the grades stay in the
   bar above the bottom nav, without the key.
 - The review logic is unchanged: ts-fsrs, the keys 1 to 4, the focus that follows the reader.
+- **The suggestion's gloss.** The panel draws each candidate's main translation again: the one the entry itself opens with (RL-91's default sense, the order RL-97's lead line uses), so it reads «nombre» for `name`. This reverses the 2026-09-11 refusal of a raw first translation («ñame»), which no longer holds: senses are ordered inside a group.

@@ -27,15 +27,17 @@
   /* docs/wordbook/DESIGN.md "Viewport": Registro, Cuenta and Dispositivos are
      a list and a set of controls, not prose — the reading cap wastes half
      the desktop on them, so `measure="full"` drops it. Two classes to
-     outrank the single-class `.page` rule above. */
-  .page.full {
+     outrank the single-class `.page` rule above. `table` is `full` with a cap on
+     the desktop (below). */
+  .page.full,
+  .page.table {
     max-width: none;
     margin-inline: 0;
   }
 }
 
 /* docs/wordbook/DESIGN.md "Viewport": the sidebar (bottom-nav.module.css)
-   takes a fixed 240px band on the left from 1024px up. No bottom bar to
+   takes a fixed band (`--rl-sidebar-width`) on the left from 1024px up. No bottom bar to
    clear any more, so the 45px reserve above goes back to a plain 6-token
    pad; the reading column centres in what is left of the viewport, not in
    the viewport itself, so the offset feeds the same calc that centres it.
@@ -45,48 +47,53 @@
 @media (min-width: 1024px) {
   .page.page {
     padding-bottom: var(--space-6);
-    margin-inline-start: calc(240px + (100% - 240px - 620px) / 2);
+    margin-inline-start: calc(var(--rl-sidebar-width) + (100% - var(--rl-sidebar-width) - 620px) / 2);
     margin-inline-end: 0;
   }
 
   /* `full` takes whatever width is left of the sidebar, not a centred
      620px column — three classes to outrank both rules above.
      `width: auto` is the load-bearing half: the 660px rule above sets
-     `width: 100%`, and 100% of the viewport pushed 240px right overflows by
+     `width: 100%`, and 100% of the viewport pushed by the sidebar overflows by
      exactly the sidebar's own band at every desktop width. */
-  .page.page.full {
-    margin-inline-start: 240px;
+  .page.page.full,
+  .page.page.table {
+    margin-inline-start: var(--rl-sidebar-width);
     width: auto;
   }
-}
 
-/* docs/wordbook/DESIGN.md: from 1280px a screen of two panels takes everything
-   the sidebar leaves; `Panels` centres its own 1120px inside it. Three classes to outrank the
-   centred reading column above. */
-@media (min-width: 1280px) {
-  .page.page.panels,
-  .page.page.margin {
-    margin-inline-start: 240px;
-    width: auto;
-    max-width: none;
+  /* Registro's table: 1100px of content, so the header's buttons sit over the table's edge. */
+  .page.page.table {
+    max-width: calc(1100px + 2 * var(--space-6));
   }
-}
 
-/* Buscar's own air: the column and the margin sit 56px from the sidebar and the top. */
-@media (min-width: 1280px) {
-  .page.page.margin {
-    padding: 40px 56px;
-  }
-}
-
-/* The review's column: 680px of content centred in what the sidebar leaves, whatever the width. The
-   padding sits inside the cap, so it is added to it. */
-@media (min-width: 1024px) {
+  /* The review's column: 680px of content centred in what the sidebar leaves, whatever the width. The
+     padding sits inside the cap, so it is added to it. */
   .page.page.session {
     --session: calc(680px + 2 * var(--space-6));
     width: auto;
     max-width: var(--session);
     margin-inline-end: 0;
-    margin-inline-start: max(240px, calc(240px + (100% - 240px - var(--session)) / 2));
+    margin-inline-start: max(
+      var(--rl-sidebar-width),
+      calc(var(--rl-sidebar-width) + (100% - var(--rl-sidebar-width) - var(--session)) / 2)
+    );
+  }
+}
+
+/* docs/wordbook/DESIGN.md: from 1280px a screen of two panels takes everything
+   the sidebar leaves; `Panels` centres its own 1120px inside it. Three classes to outrank the
+   centred reading column above. `margin` is Buscar's own: the column and the margin sit 56px from
+   the sidebar and the top. */
+@media (min-width: 1280px) {
+  .page.page.panels,
+  .page.page.margin {
+    margin-inline-start: var(--rl-sidebar-width);
+    width: auto;
+    max-width: none;
+  }
+
+  .page.page.margin {
+    padding: 40px 56px;
   }
 }

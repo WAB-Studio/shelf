@@ -16,7 +16,6 @@ import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
 import { splitTranslations } from "@/lib/log/translation-line";
 import { readCardKeys } from "@/lib/review/store";
 import {
-  Box,
   Button,
   Flex,
   IconButton,
@@ -139,7 +138,7 @@ const StudyRowItem = memo(function StudyRowItem({
     <Table.Row
       extra={
         hasExtra && (
-          <Flex direction="column" gap="3" align="start" pb="3" px={{ initial: "0", md: "4" }}>
+          <Flex direction="column" gap="3" align="start" pb="3">
             {waiting && (
               <Text size="2" muted="quietest">
                 {t(row.lastOutcome === "untranslated" ? "study.pendingPhrase" : "study.pendingWord")}
@@ -513,38 +512,36 @@ export function HistoryList() {
     <Flex direction="column" gap="5">
       <Flex direction="column" gap="3">
         <Flex align="center" gap="4" wrap="wrap">
-          <Box width="420px" maxWidth="100%">
-            <TextField.Root
-              ref={filterField}
-              size="3"
-              value={query}
-              onChange={(event) => change(event.target.value)}
-              label={t("study.filterLabel")}
-              hideLabel
-              placeholder={t("study.filterPlaceholder")}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            >
-              {query.length > 0 && (
-                <TextField.Slot side="right">
-                  <IconButton
-                    type="button"
-                    size="2"
-                    variant="ghost"
-                    color="gray"
-                    aria-label={t("study.filterClear")}
-                    onClick={() => {
-                      change("");
-                      filterField.current?.focus();
-                    }}
-                  >
-                    <X size={16} />
-                  </IconButton>
-                </TextField.Slot>
-              )}
-            </TextField.Root>
-          </Box>
+          <TextField.Root
+            ref={filterField}
+            size="3"
+            value={query}
+            onChange={(event) => change(event.target.value)}
+            filter
+            aria-label={t("study.filterLabel")}
+            placeholder={t("study.filterPlaceholder")}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          >
+            {query.length > 0 && (
+              <TextField.Slot side="right">
+                <IconButton
+                  type="button"
+                  size="2"
+                  variant="ghost"
+                  color="gray"
+                  aria-label={t("study.filterClear")}
+                  onClick={() => {
+                    change("");
+                    filterField.current?.focus();
+                  }}
+                >
+                  <X size={16} />
+                </IconButton>
+              </TextField.Slot>
+            )}
+          </TextField.Root>
           <Segments
             label={t("study.filterGroup")}
             value={segment}
