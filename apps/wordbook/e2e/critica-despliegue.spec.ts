@@ -101,17 +101,6 @@ test("a /registro row is one compact line, and the story and the row count the s
   expect((await row.boundingBox())!.height).toBeLessThan(60);
 });
 
-test("«Repasar ahora» in a word's history opens that word alone", async ({ page }) => {
-  await open(page, "/", 1280);
-  await lookUp(page, ["time", "bleak"]);
-  await box(page).fill("time");
-  await page.getByRole("link", { name: messages.story.reviewNow }).click();
-  await expect(page).toHaveURL(/\/repaso\?palabra=time$/);
-  await expect(page.getByText("1 de 1")).toBeVisible();
-  await expect(page.locator("main")).toContainText("time");
-  await expect(page.locator("main")).not.toContainText("bleak");
-});
-
 test("a word with nothing to review says so and still offers the day's cards", async ({ page }) => {
   await open(page, "/", 390);
   await lookUp(page, ["time"]);

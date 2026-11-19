@@ -12,7 +12,7 @@ const LEAD_SHOWN = 4;
 // A word's translations on one comma-separated line, the first three and a «ver N más» for the
 // rest (RL-82). The same line serves the word's answer and its history.
 export function TranslationList({
-  items,
+  items: rawItems,
   muted,
   lead,
 }: {
@@ -22,6 +22,10 @@ export function TranslationList({
   lead?: boolean;
 }) {
   const t = useTranslations("word");
+  // The entry's line carries no trailing «...» or «…» a gloss may end on in the data, and no gloss twice.
+  const items = lead
+    ? [...new Set(rawItems.map((item) => item.replace(/\s*(\.{3}|…)$/, "").trim()).filter((item) => item !== ""))]
+    : rawItems;
   const [open, setOpen] = useState(false);
   // One translation behind «ver 1 más» is no saving: the entry's line folds from two.
   const limit = lead && items.length > LEAD_SHOWN + 1 ? LEAD_SHOWN : lead ? items.length : undefined;

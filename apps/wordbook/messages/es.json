@@ -96,8 +96,7 @@
     "noPhrases": "Aún no has buscado una frase que la tenga.",
     "reviewNew": "Todavía no la repasas.",
     "reviewDue": "Toca repasarla hoy.",
-    "reviewLater": "{when, select, today {La repasas hoy más tarde.} tomorrow {La repasas mañana.} other {La repasas el {date}.}}",
-    "reviewNow": "Repasar ahora"
+    "reviewLater": "{when, select, today {La repasas hoy más tarde.} tomorrow {La repasas mañana.} other {La repasas el {date}.}}"
   },
   "phrase": {
     "translating": "Traduciendo…",
