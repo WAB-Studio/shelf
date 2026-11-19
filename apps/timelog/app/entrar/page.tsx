@@ -13,8 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const [{ error }, t] = await Promise.all([searchParams, getTranslations("time.signIn")]);
   return (
-    <Page>
-      <AppHeader signedIn={false} />
+    <Page header={<AppHeader signedIn={false} />}>
       <Stack gap={4}>
         <Title>{t("title")}</Title>
         <SignInForm linkError={error !== undefined} />

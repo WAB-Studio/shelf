@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { Nav, TextLink } from "@/components/ui";
 
 // «Hoy», «Semana», «Llaves»: at the foot on the phone, at the right of the header on the desktop.
-export function AppNav() {
+export function AppNav({ vertical }: { vertical?: boolean }) {
   const t = useTranslations("time.nav");
   const path = usePathname();
   const links = [
@@ -15,7 +15,7 @@ export function AppNav() {
     { href: "/llaves", label: t("keys") },
   ];
   return (
-    <Nav label={t("label")}>
+    <Nav label={t("label")} vertical={vertical}>
       {links.map((link) => (
         <TextLink key={link.href} pill href={link.href} current={path === link.href || (link.href === "/semana" && path === "/exportar")}>
           {link.label}

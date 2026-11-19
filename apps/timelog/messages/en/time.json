@@ -111,11 +111,12 @@
   },
   "system": "System",
   "claude": {
+    "title": "Claude",
     "never": "No Claude Code time has arrived yet: it is read from its sessions folder on your PC, and for WSL you point to it in aw-timelog.toml (claude_dir).",
     "session": "{project}: {duration}",
     "span": "{from} – {to}",
-    "screenAgent": "Claude: {screen} on screen · Claude Code worked {agent}",
-    "screenOnly": "Claude: {screen} on screen",
+    "screenAgent": "{screen} on screen · Claude Code worked {agent}",
+    "screenOnly": "{screen} on screen",
     "sessionsMore": "and {n} more sessions"
   },
   "internet": {

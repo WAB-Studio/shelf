@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
 import { BarRows, capped, type BarRow } from "@/components/screens/app-rows";
-import { Disclosure, Section, Stack, Text, TextLink } from "@/components/ui";
+import { Disclosure, Section, Text, TextLink } from "@/components/ui";
 import { projectName } from "@/lib/claude-project";
 import { INSTALLER_URL } from "@/lib/installer";
 import { sum } from "@/lib/totals";
@@ -15,7 +15,7 @@ type Words = Awaited<ReturnType<typeof calendarWords>>;
 const ROWS_SHOWN = 8;
 const SESSIONS_SHOWN = 8;
 
-// Claude in one line (RT-24): what the person spent in front of it (claude.ai and the app; claude.ai is also a site) and what
+// Claude in one titled line (RT-24): what the person spent in front of it (claude.ai and the app; claude.ai is also a site) and what
 // Claude Code worked on its own, the line opening onto Claude Code's sessions named by project. A Claude Code that never sent
 // is said once, in a sentence; one that sent and did nothing leaves no line.
 export async function ClaudeLine({ screen, agent, sessions, hasClaudeCode, words }: { screen: number; agent: number; sessions: ClaudeSessionTime[]; hasClaudeCode: boolean; words: Words }) {
@@ -29,7 +29,7 @@ export async function ClaudeLine({ screen, agent, sessions, hasClaudeCode, words
   };
   const text = line === null ? null : <Text as="p">{line}</Text>;
   return (
-    <Stack gap={2}>
+    <Section panel title={t("title")}>
       {text === null ? null : sessions.length === 0 ? (
         text
       ) : (
@@ -38,7 +38,7 @@ export async function ClaudeLine({ screen, agent, sessions, hasClaudeCode, words
         </Disclosure>
       )}
       {never ? <Text as="p" variant="meta">{t("never")}</Text> : null}
-    </Stack>
+    </Section>
   );
 }
 
@@ -77,7 +77,7 @@ export async function SitesBlock({ isToday, sites, pages, hasSites, words }: { i
   };
   const detail = (host: string) => (pages.some((page) => page.host === host) ? pagesOf(host) : undefined);
   return (
-    <Section title={t("title")} figure={sites.length > 0 ? words.duration(sum(sites)) : undefined}>
+    <Section panel title={t("title")} figure={sites.length > 0 ? words.duration(sum(sites)) : undefined}>
       {sites.length > 0 ? (
         <>
           <SiteBars sites={sites} words={words} detail={detail} />

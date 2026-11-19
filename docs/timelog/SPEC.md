@@ -122,6 +122,15 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   that adds the MCP server to Claude Code with the key (the key just created, else a placeholder), its copy button on the row of
   what it copies; a key revoked on the screen leaves it at once, with its commands. «Exportar» (RT-25) opens with one sentence;
   what the file holds is a collapsed «Qué trae el archivo». Successor of RT-27. (2026-11-19)
+- [ ] **RT-34** TimeLog is designed for the desktop first. From 1100 wide the header is a sidebar on the left (the logo, «Hoy»,
+  «Semana», «Llaves» stacked, the language switch at its foot) and the screen takes the width beside it, up to 1440. On «Hoy», a
+  day and «Semana» the top line has the title at the left, the total under it in mono and ‹ › together at the right; under the
+  class bar two columns: Apps (with the day's or week's total) in the wide one, Sitios, Proyectos and «Claude» (a titled section;
+  its line reads «26 min en pantalla · Claude Code trabajó 1 h 7 min») in the narrow one, each section a raised panel. «Semana»
+  draws its seven days as seven standing bars side by side, each a link to its day with its name and figure under it, before
+  the class bar; «Exportar esta semana» closes the narrow column. «Llaves» and «Exportar» keep a 760 column at the left. Under
+  1100 the screens are RT-29, RT-30 and RT-33 as written, the columns stacked Apps first. Overrides the one column of RT-29 and
+  RT-30 from 1100. (2026-11-19, «no me importa mobile, debemos hacer un buen diseño para desktop y luego adaptamos mobile»)
 
 ### Non-functional requirements
 

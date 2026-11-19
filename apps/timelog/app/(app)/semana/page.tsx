@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { ClaudeLine, ProjectBars, SiteBars } from "@/components/screens/claude-internet";
-import { Between, Composition, DayRows, Period, Section, Stack, Text, TextLink } from "@/components/ui";
+import { Between, Columns, Composition, DayRows, Period, Section, Stack, Text, TextLink } from "@/components/ui";
 import { appTone, mainSiteClass, timeByClass } from "@/lib/app-classes";
 import { displayApp } from "@/lib/app-names";
 import { claudeScreen } from "@/lib/daily";
@@ -31,7 +31,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   return { title: t("title", rangeOf(words, monday)) };
 }
 
-// «Semana» (RT-05). The span arrives with the week's reads, so a week past it redirects to its nearer end.
+// «Semana» (RT-05, RT-34): the seven days, the week by class, then the apps beside the sites, projects and Claude. The span arrives with the week's reads, so a week past it redirects to its nearer end.
 export default async function WeekPage({ searchParams }: { searchParams: Promise<{ semana?: string }> }) {
   const today = civilDay();
   const { semana } = await searchParams;
@@ -53,6 +53,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const longestDay = Math.max(1, ...minutes);
   const weekApps = appsOfWeek(byDay, days.map((one) => one.day), words.system);
   const apps = weekApps.map((one) => ({ app: one.app, seconds: one.total }));
+  const appsTotal = sum(apps);
   const browserKind = mainSiteClass(sites, pages);
   const classes = timeByClass(apps, sites, words.system, pages);
   const projects = projectsOf(windows);
@@ -104,44 +105,50 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
             days={days.map(({ day }, index) => ({
               key: day,
               label: dayName(day),
-              figure: words.duration(minutes[index] * 60),
-              share: minutes[index] / longestDay,
+              figure: day > today ? "—" : words.duration(minutes[index] * 60),
+              share: day > today ? 0 : minutes[index] / longestDay,
               future: day > today,
               href: day === today ? "/" : `/dia/${day}`,
               description: day > today ? t("upcoming", { day: dayName(day) }) : t("bar", { day: dayName(day), duration: words.duration(minutes[index] * 60) }),
             }))}
           />
-          {apps.length === 0 ? (
-            <Text as="p">{t("empty")}</Text>
-          ) : (
-            <>
-              <Composition label={tToday("byClassLabel")} parts={classes.map((one) => ({ key: one.kind, tone: one.kind, seconds: one.seconds, name: tClass(one.kind), figure: words.duration(one.seconds) }))} />
-              <Section title={tToday("apps")}>
-                <BarRows
-                  of={weekApps[0]?.total}
-                  rows={weekApps.slice(0, APPS_SHOWN).map(appRow)}
-                  overflow={weekApps.length > APPS_SHOWN ? { summary: tToday("appsMore", { n: weekApps.length - APPS_SHOWN, duration: words.duration(sum(apps.slice(APPS_SHOWN))) }), rows: weekApps.slice(APPS_SHOWN).map(appRow) } : undefined}
-                />
-              </Section>
-            </>
-          )}
-          {sites.length > 0 ? (
-            <Section title={tSites("title")} figure={words.duration(sum(sites))}>
-              <SiteBars sites={sites} words={words} />
-            </Section>
-          ) : null}
-          {projects.length > 0 ? (
-            <Section title={tToday("projects")} figure={words.duration(sum(projects))}>
-              <ProjectBars projects={projects} words={words} />
-            </Section>
-          ) : null}
-          <ClaudeLine screen={screenSeconds} agent={agentSeconds} sessions={sessions} hasClaudeCode={span.hasClaudeCode} words={words} />
-          <Between>
-            <TextLink download href={`/api/export?from=${monday}&to=${sunday}`}>
-              {t("export")}
-            </TextLink>
-            <TextLink href="/exportar">{t("exportMore")} ›</TextLink>
-          </Between>
+          {apps.length === 0 ? null : <Composition label={tToday("byClassLabel")} parts={classes.map((one) => ({ key: one.kind, tone: one.kind, seconds: one.seconds, name: tClass(one.kind), figure: words.duration(one.seconds) }))} />}
+          <Columns
+            main={
+              apps.length === 0 ? (
+                <Text as="p">{t("empty")}</Text>
+              ) : (
+                <Section panel title={tToday("apps")} figure={words.duration(appsTotal)}>
+                  <BarRows
+                    of={weekApps[0]?.total}
+                    rows={weekApps.slice(0, APPS_SHOWN).map(appRow)}
+                    overflow={weekApps.length > APPS_SHOWN ? { summary: tToday("appsMore", { n: weekApps.length - APPS_SHOWN, duration: words.duration(sum(apps.slice(APPS_SHOWN))) }), rows: weekApps.slice(APPS_SHOWN).map(appRow) } : undefined}
+                  />
+                </Section>
+              )
+            }
+            aside={
+              <>
+                {sites.length > 0 ? (
+                  <Section panel title={tSites("title")} figure={words.duration(sum(sites))}>
+                    <SiteBars sites={sites} words={words} />
+                  </Section>
+                ) : null}
+                {projects.length > 0 ? (
+                  <Section panel title={tToday("projects")} figure={words.duration(sum(projects))}>
+                    <ProjectBars projects={projects} words={words} />
+                  </Section>
+                ) : null}
+                <ClaudeLine screen={screenSeconds} agent={agentSeconds} sessions={sessions} hasClaudeCode={span.hasClaudeCode} words={words} />
+                <Between>
+                  <TextLink download href={`/api/export?from=${monday}&to=${sunday}`}>
+                    {t("export")}
+                  </TextLink>
+                  <TextLink href="/exportar">{t("exportMore")} ›</TextLink>
+                </Between>
+              </>
+            }
+          />
         </>
       )}
     </Stack>
