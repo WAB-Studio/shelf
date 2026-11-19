@@ -3,7 +3,7 @@ import { openLogDatabase } from "./record";
 import type { LookupRecord, SyncState } from "./types";
 import { deleteCard } from "../review/store";
 
-// Deleting a `/registro` row (RL-66, device half) and the marks other devices
+// Deleting a `/registro` row (RL-99, device half) and the marks other devices
 // made (RL-70). No request leaves from here (RNL-09): the queue waits in the
 // `sync` store for the next round the existing triggers start.
 

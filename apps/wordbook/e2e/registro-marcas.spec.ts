@@ -7,7 +7,7 @@ import { DATABASE_VERSION } from "../lib/log/record";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { expect, studyHeader, test } from "./fixtures";
 
-// RL-70, RL-66 (device half): a search another device deleted leaves this one
+// RL-70, RL-99 (device half): a search another device deleted leaves this one
 // when /registro opens with the copy on, the rows it held and the count above
 // them with it, and the list repaints without a reload when the round brought
 // marks and no row. Every answer of the route is the test's own: no session,

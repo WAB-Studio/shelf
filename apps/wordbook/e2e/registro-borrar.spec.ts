@@ -12,8 +12,8 @@ import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
 import { afterFrames, askToRemove, expect, freezeTimers, runClock, studyHeader, test } from "./fixtures";
 
-// K10, RL-66, RL-70, RNL-11: each /registro row carries a ✕ that deletes its
-// group. Written from SPEC RL-66/RL-70, RNL-11 (successor of RNL-09, approved
+// K10, RL-99, RL-70, RNL-11: each /registro row carries a «⋯» menu whose «Quitar» deletes its
+// group. Written from SPEC RL-99/RL-70, RNL-11 (successor of RNL-09, approved
 // 2026-10-17) and the boards RegistroBorrarFila, RegistroBorrarFilaConfirmar,
 // RegistroBorrarFilaFallo and RegistroBorrarFilaSinCuenta, not from the component. Names come from the message catalogue through the
 // same ICU runtime the app renders with.

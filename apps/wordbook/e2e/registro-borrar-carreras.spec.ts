@@ -9,7 +9,7 @@ import { LOG_DELETED_EVENT } from "../lib/log/delete";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { askToRemove, expect, studyHeader, test } from "./fixtures";
 
-// RL-66, RL-56: the /registro row list around a delete. Written from the
+// RL-99, RL-56: the /registro row list around a delete. Written from the
 // contract (a delete that finds nothing returns the row to idle; a late read
 // never paints over a newer one; a deleted word searched again opens idle; a
 // flush during a read is not lost), not from the component. Every race is built

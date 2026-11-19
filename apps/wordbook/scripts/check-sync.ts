@@ -1159,7 +1159,7 @@ async function main() {
     await lateDb.end();
   }
 
-  // S33-S42 (RL-66, RL-70, RNL-10): a round deletes the searches it names, marks them,
+  // S33-S42 (RL-99, RL-70, RNL-10): a round deletes the searches it names, marks them,
   // refuses their return and hands the marks to every device. Each scenario owns a
   // committed reader (real commits: a mark's `deleted_at` must differ from a row's
   // `received_at`), deleted at the end; the cascade takes everything it wrote.

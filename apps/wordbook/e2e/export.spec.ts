@@ -581,7 +581,7 @@ test("RL-65: a confirmed zero shows neither control, and clearing the log takes 
 // and the row's ✕ is K10's. This test therefore does what that function does
 // to the store (removes the group's rows in one transaction) and fires the
 // event it announces itself with, `voyager:log-deleted`.
-test("RL-66: after the last group is deleted, both controls leave without a reload", async ({ page }) => {
+test("RL-99: after the last group is deleted, both controls leave without a reload", async ({ page }) => {
   await deleteTranslator(page);
   await seedStudy(page, [studyRow("alpha", "alfa", NOW)]);
   await page.goto("/registro");
