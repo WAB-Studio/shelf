@@ -153,7 +153,7 @@ function authUserRow(user: { id: string; email: string }, sql: Sql | postgres.Tr
  * auth row and the registry row can never happen. The auth row carries the full
  * column set GoTrue needs, so a magic-link send finds the user.
  *
- * A database with no `app_users` (GoalLog's) skips that step: the relation is
+ * A database with no `app_users` skips that step: the relation is
  * looked up first, one cheap round trip, so no caller has to know which app it runs in.
  */
 export async function registerEphemeralIdentity(
@@ -239,7 +239,7 @@ export async function registeredIdentities(
 }
 
 /**
- * Records an OAuth client this run registered in `goals.oauth_clients`, stamped
+ * Records an OAuth client this run registered in `harness.oauth_clients`, stamped
  * with this run's id, so the run's close or a later reap can drop it by registry
  * rather than by its name or its address.
  */

@@ -1,7 +1,7 @@
 import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 
-// Same fail-open behaviour as GoalLog's `lib/auth/deliverability.ts` and
-// WordBook's guard; promoting it to `packages/` waits for a cross-app slice.
+// Same fail-open behaviour as WordBook's guard; promoting it to `packages/`
+// waits for a cross-app slice.
 //
 // RFC 5321 §5.1: no MX falls back to the domain's own address record
 // (implicit MX). RFC 7505: a domain that takes no mail at all publishes

@@ -19,7 +19,7 @@ cp "$TMP/local" "$TMP/twice"
 "$SUT" "$TMP/twice" 3202
 cmp -s "$TMP/local" "$TMP/twice" || fail "idempotent"
 
-printf 'A=1\nNEXT_PUBLIC_SITE_URL=https://pulsar.example.app\n' >"$TMP/host"
+printf 'A=1\nNEXT_PUBLIC_SITE_URL=https://wordbook.example.app\n' >"$TMP/host"
 cp "$TMP/host" "$TMP/host.want"
 "$SUT" "$TMP/host" 3202
 cmp -s "$TMP/host" "$TMP/host.want" || fail "real host untouched"

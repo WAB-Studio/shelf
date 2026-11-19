@@ -1,6 +1,6 @@
 # Recuperación de Shelf (RF-191)
 
-La base de Shelf (HomeFund, GoalLog, WordBook y TimeLog comparten el proyecto Supabase `mrxttyiyignnehcclsyx`) está en
+La base de Shelf (HomeFund, WordBook y TimeLog comparten el proyecto Supabase `mrxttyiyignnehcclsyx`) está en
 el plan Free, que no guarda copias que se puedan restaurar. La copia es nuestra: cifrada y en un repositorio privado.
 
 **Córrela cada domingo y antes de toda migración que borre o cambie datos.**

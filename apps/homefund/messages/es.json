@@ -2009,7 +2009,7 @@
       "kindInvalid": "Elige para qué es la credencial."
     },
     "mcpHeading": "Conectar con Claude",
-    "mcpDescription": "En claude.ai (web, escritorio o móvil), agrega un conector personalizado con la URL de arriba: te pedirá entrar con HomeFund y listo. Claude lee tus cuentas, movimientos y «Revisar el mes», y registra movimientos o crea y edita cuentas, categorías y etiquetas, y etiqueta movimientos, cuando se lo confirmas, siempre con tus mismos permisos; revocar su clave en la lista lo desconecta. Nunca crea ni revoca claves, y lo que borra lo borra de a una fila, tras tu confirmación. Una clave que crees aquí sigue sirviendo: en Claude Code va en «Authorization: Bearer», y en un conector sin inicio de sesión en el encabezado «X-API-Key». Una clave de webhook no abre esta puerta. Para hablar con HomeFund y GoalLog en un mismo chat, el repositorio github.com/WAB-Studio/asistente (privado de WAB-Studio) trae todo listo: sigue su README.",
+    "mcpDescription": "En claude.ai (web, escritorio o móvil), agrega un conector personalizado con la URL de arriba: te pedirá entrar con HomeFund y listo. Claude lee tus cuentas, movimientos y «Revisar el mes», y registra movimientos o crea y edita cuentas, categorías y etiquetas, y etiqueta movimientos, cuando se lo confirmas, siempre con tus mismos permisos; revocar su clave en la lista lo desconecta. Nunca crea ni revoca claves, y lo que borra lo borra de a una fila, tras tu confirmación. Una clave que crees aquí sigue sirviendo: en Claude Code va en «Authorization: Bearer», y en un conector sin inicio de sesión en el encabezado «X-API-Key». Una clave de webhook no abre esta puerta.",
     "mcpIssue": "Crear clave para Claude",
     "kind": {
       "android": "Android",

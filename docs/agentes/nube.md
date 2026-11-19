@@ -9,7 +9,7 @@ the repo's `.claude/settings.json`, hooks, `CLAUDE.md`, agents and skills load, 
   - `*.supabase.co` (REST, Auth and `db.<ref>.supabase.co`)
   - `*.pooler.supabase.com` (DATABASE_URL and MIGRATION_DATABASE_URL, ports 6543 and 5432)
   - `api.supabase.com`
-  - `api.openai.com` (GoalLog and WordBook model calls; stubbed in every test, so only a live run needs it)
+  - `api.openai.com` (WordBook model calls; stubbed in every test, so only a live run needs it)
   - `api.mymemory.translated.net` (WordBook translation)
   - `open.er-api.com` (HomeFund exchange rates)
   - `*.vercel.com`, `api.vercel.com` (only to deploy or read Vercel from the VM)
@@ -39,7 +39,7 @@ the repo's `.claude/settings.json`, hooks, `CLAUDE.md`, agents and skills load, 
 - Run `typecheck` and `lint` as always. A suite needs the local stack: `scripts/supabase-local.sh start`
   (starts Docker first when the daemon is down), then `scripts/supabase-local.sh exec <cmd>`.
 - The stack does not survive an idle reclaim: start it again.
-- Missing in the cloud: the user's MCP servers (Supabase, Vercel, pulsar are claude.ai connectors or absent), plugins, `settings.local.json`.
+- Missing in the cloud: the user's MCP servers (Supabase, Vercel are claude.ai connectors or absent), plugins, `settings.local.json`.
 
 ## Pull requests
 

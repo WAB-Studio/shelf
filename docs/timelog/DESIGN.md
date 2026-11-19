@@ -1,6 +1,6 @@
 # TimeLog — design guide
 
-Governs `apps/timelog` alone. No pattern crosses over from HomeFund, WordBook or GoalLog because it
+Governs `apps/timelog` alone. No pattern crosses over from HomeFund or WordBook because it
 exists next door.
 
 Written 2026-10-28 for P5. The user has not seen it drawn yet: the first screen built is the first

@@ -11,10 +11,8 @@
   "scripts": {
     "dev": "npm run dev -w apps/homefund",
     "dev:wordbook": "npm run dev -w apps/wordbook",
-    "dev:goallog": "npm run dev -w apps/goallog",
     "build": "npm run build -w apps/homefund",
     "build:wordbook": "npm run build -w apps/wordbook",
-    "build:goallog": "npm run build -w apps/goallog",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "check": "npm run check -w apps/homefund"

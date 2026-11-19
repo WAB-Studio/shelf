@@ -22,8 +22,6 @@ Only the files the branch itself changed:
 `git log $(git merge-base <base> HEAD)..HEAD --name-only --format=`.
 Never the whole repository. The risk is in the change.
 
-Run `npm run mutate:pure -- --changed <base>` in `apps/goallog` first on the pure `lib/` files the branch changed, and spend your own budget on screens, policies and actions, which Stryker cannot reach.
-
 Skip generated files, fixtures, migrations and anything under `e2e/` or `scripts/check-*`: you
 mutate the app, never the thing that judges it.
 
@@ -53,7 +51,6 @@ you ran, and name the mutants you did not run for cost.
 Run at most five suites at once: 15 GB holds five servers and five Chromiums.
 
 Build once for all the mutations; never rebuild per mutant.
-Drive pulsar's mutations against `next build` + `next start`, never `next dev`, never `rm -rf .next`.
 For orbit and voyager, start the dev server with `NODE_OPTIONS=--max-old-space-size=3072`. Restart it every eight mutants and
 whenever its RSS passes 3 GB. `next dev` keeps every recompile in memory: one server
 reached 7.2 GB on 2026-10-06 and left the machine 2 GB. Re-run any mutant whose run straddled a restart.

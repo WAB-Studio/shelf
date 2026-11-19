@@ -7,7 +7,7 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
 - Lane 1 is the main checkout; lanes 2 and up are worktrees at `../<checkout>-l<n>`.
 - Lanes 2 to 6 may run e2e specs; lanes 7 and up take only work with no e2e (docs, words, pure functions,
   `check:*`). The cap is RAM and the shared Auth, not the lane count.
-- Take the port from the app: homefund on :300<n-1>, wordbook on :310<n-1>, goallog on :320<n-1>.
+- Take the port from the app: homefund on :300<n-1>, wordbook on :310<n-1>.
 - Run an app's npm scripts from its own directory, `apps/homefund`, or from the root with `-w apps/homefund`.
 - Work one track per lane. Never two tracks on one lane; never run a lane's suite while another track holds it.
 - Run one dev server per worktree. Take `Another next dev server is already running` as: one is up, use it.
@@ -40,7 +40,6 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
   `HARNESS_DATABASE=remote` only for the RNF-09 timing (`check:http`, `check:queries` against the remote).
 - Run the RNF-09 timing alone. A second lane on the same server inflates it.
 - Share one dev server between lanes, or point a lane at its own with `HARNESS_BASE_URL`.
-- Run pulsar specs as `apps/goallog/AGENTS.md` says. Its Playwright ignores `HARNESS_BASE_URL`.
 - `scripts/worktree.sh` bootstraps a lane. Bootstrap one by hand only outside a worktree:
   `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run harness:token`. It creates `harness-2@example.invalid` and
   `harness-member-2@example.invalid` and lands their token rows.
@@ -51,15 +50,13 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
   live lane's identity out from under it.
 - Run `harness:reap` only when every lane is quiet; it refuses while any heartbeat is fresh. It never touches a lane
   identity.
-- Give a lane opened with `--app goallog` its identities before GoalLog's database checks: copy `apps/homefund/.env.local`
-  into it and run `HARNESS_LANE=<n> scripts/supabase-local.sh exec npm run harness:token` from its `apps/homefund`.
 - Run `harness:census` from the main checkout when the lane is single-app. A lane opened with `--app wordbook` copies
   no `apps/homefund/.env.local`, so the census dies there. Both checkouts share one database.
 
 ## The session that opens lanes
 
 - Open a lane: `scripts/worktree.sh <lane> <branch> [base] [--app <name>]`. It costs 4 seconds.
-- `--app` defaults to `homefund` and takes `homefund`, `wordbook` or `goallog`. An app with no database copies no
+- `--app` defaults to `homefund` and takes `homefund` or `wordbook`. An app with no database copies no
   `.env.local` and mints no identity, so its lane opens with the database unreachable. An unknown name refuses.
 - Rebase a branch cut before a folder rename with `git -c merge.directoryRenames=true rebase <base>`. Without it the branch's new files conflict (`UA`).
 - Open a lane by hand for an app not yet committed on the base:

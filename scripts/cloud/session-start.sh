@@ -30,7 +30,7 @@ fi
 # No secret is written: `supabase-local.sh exec` overlays the local stack's values on whatever the file holds.
 # The file exists only so tools that demand it (db:migrate) find one. wordbook's real file is the user's and
 # AGENTS.md forbids touching it; a fresh VM has none, so a missing file is created, an existing one never changed.
-port_of() { case $1 in homefund) echo 3000 ;; wordbook) echo 3100 ;; goallog) echo 3200 ;; timelog) echo 3300 ;; esac; }
+port_of() { case $1 in homefund) echo 3000 ;; wordbook) echo 3100 ;; timelog) echo 3300 ;; esac; }
 for env_example in apps/*/.env.example; do
   [ -f "$env_example" ] || continue
   app_dir="$(dirname "$env_example")"; app="$(basename "$app_dir")"
@@ -49,7 +49,7 @@ have="$(sed -n 's/^SUPABASE_VERSION="\([^"]*\)".*/\1/p' scripts/cloud/setup.sh)"
 
 # Gitignored route types the root typecheck needs. One app at a time, as CI does.
 if [ -d node_modules ]; then
-  for app in homefund wordbook goallog timelog; do
+  for app in homefund wordbook timelog; do
     [ -d "apps/$app" ] || continue
     [ -d "apps/$app/.next/types" ] && continue
     (cd "apps/$app" && timeout 120 npx next typegen >/dev/null 2>&1) && DONE+=("typegen $app") || warn "typegen failed for $app."
