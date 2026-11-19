@@ -49,7 +49,20 @@ const KNOWN: Record<string, string> = {
   steam: "Steam",
   obs64: "OBS",
   whatsapp: "WhatsApp",
-  javaw: "Java",
+  telegram: "Telegram",
+  powershell: "PowerShell",
+  pwsh: "PowerShell",
+  postman: "Postman",
+  unity: "Unity",
+  "unity hub": "Unity Hub",
+  githubdesktop: "GitHub Desktop",
+  codium: "VSCodium",
+  valorant: "Valorant",
+  rocketleague: "Rocket League",
+  epicgameslauncher: "Epic Games Launcher",
+  overwolf: "Overwolf",
+  minecraft: "Minecraft",
+  javaw: "Minecraft",
   java: "Java",
   steamwebhelper: "Steam",
   riotclientservices: "Riot Client",
@@ -75,6 +88,8 @@ const SYSTEM = new Set([
   "shellhost",
   "dwm",
   "taskmgr",
+  "snippingtool",
+  "pickerhost",
   "widgets",
   "openconsole",
   "svchost",
@@ -106,15 +121,24 @@ function isBackground(bare: string): boolean {
 
 const TEAMS = /^(ms-?teams|teams|microsoft\.teams.*)$/;
 
+// Unreal's shipping builds name their process «Game-Win64-Shipping»: the class sees the suffix, the person never does.
+const SHIPPING = /-win64-shipping$/i;
+
 // «Code.exe» to «VS Code»; a process not known keeps its name without the extension. `null` is system noise.
+// A shipping build of a known game reads as the game; an unknown one keeps its suffix for its class (`displayApp` hides it).
 export function readableApp(raw: string): string | null {
   const bare = raw.replace(/\.exe$/i, "");
   const key = bare.toLowerCase();
   if (SYSTEM.has(key)) return null;
   if (TEAMS.test(key)) return "Teams";
-  const known = KNOWN[key];
+  const known = KNOWN[key] ?? KNOWN[key.replace(SHIPPING, "")];
   if (known !== undefined) return known;
   return isBackground(bare) ? null : bare;
+}
+
+// The name a screen writes for a readable app: without a «-Win64-Shipping» suffix.
+export function displayApp(name: string): string {
+  return name.replace(SHIPPING, "");
 }
 
 // The name a row of raw process names is counted under: its readable name, or `systemName` for Windows' noise.

@@ -256,3 +256,9 @@ Each entry names the rule and the file it lives in now.
   and 105 s on cold dev (run 42966709608); the build 8 to 14 s. Shard 1 ran its 47 tests in 51.7 s, 2.2 min on dev.
 - The build caught what dev hid: accepting an invitation left the tab titled «HomeFund», because an action's
   `refresh()` does not redraw the head there. The card now calls `router.refresh()` itself.
+
+## GoalLog retired (`AGENTS.md` § Apps), 2026-11-19
+
+- Decided by the user 2026-11-19: «Sacarlo del repo». It was never used; production held one archived test goal; studyAid, in another repo, replaces it.
+- The code survives in git history before commit `d331a393f` (`apps/goallog`, `docs/goallog/`, its CI jobs and `pulsar-calendario.yml`). Its traps moved to `docs/TRAPS-archivo.md`.
+- Production's `goals` schema stays as is; no migration drops it. `scripts/backup/lib.sh` still backs it up; `scripts/supabase-schema-diff.sh` no longer compares it, because the local stack no longer creates it.

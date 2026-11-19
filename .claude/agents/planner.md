@@ -9,8 +9,7 @@ Plan a slice. Write no code.
 
 # Input
 
-A slice: a set of codes from the app's spec (`docs/SPEC.md` for HomeFund, `docs/wordbook/SPEC.md`,
-`docs/goallog/SPEC.md`), and the path to write the plan to.
+A slice: a set of codes from the app's spec (`docs/SPEC.md` for HomeFund, `docs/wordbook/SPEC.md`), and the path to write the plan to.
 
 # Flow
 

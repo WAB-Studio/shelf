@@ -6,15 +6,15 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTAINER="supabase_db_shelf"
-SCHEMAS="finances goals reading harness private"
-SCHEMA_LIST="'finances','goals','reading','harness','private'"
+SCHEMAS="finances reading harness private"
+SCHEMA_LIST="'finances','reading','harness','private'"
 NORMALISE="${NORMALISE:-1}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 remote_url() {
   local f
-  for f in "${SCHEMA_DIFF_ENV:-}" "$ROOT/apps/homefund/.env.local" "$ROOT/apps/goallog/.env.local" "$ROOT/apps/wordbook/.env.local"; do
+  for f in "${SCHEMA_DIFF_ENV:-}" "$ROOT/apps/homefund/.env.local" "$ROOT/apps/wordbook/.env.local"; do
     [ -n "$f" ] && [ -f "$f" ] || continue
     local v
     v="$(grep '^MIGRATION_DATABASE_URL=' "$f" | head -1 | cut -d= -f2-)"

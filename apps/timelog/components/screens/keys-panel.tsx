@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { createKey, revokeKey } from "@/app/actions/keys";
 import { keyNameSchema } from "@/lib/forms";
 import { INSTALLER_URL } from "@/lib/installer";
-import { Between, Button, Code, CodeBlock, Confirm, Field, Form, Stack, Text, TextLink } from "@/components/ui";
+import { Between, Button, Code, CodeBlock, Confirm, Disclosure, Field, Form, Stack, Text, TextLink } from "@/components/ui";
 
 export type KeyLine = { id: string; name: string; when: string | null; revoked: boolean };
 
@@ -51,11 +51,6 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
 
   return (
     <Stack gap={4}>
-      <Text as="p" variant="meta">{t("intro")}</Text>
-      <Stack gap={1}>
-        <Text as="p">{t("install")}</Text>
-        <TextLink button href={INSTALLER_URL}>{t("download")}</TextLink>
-      </Stack>
       <Form onSubmit={submit}>
         <Field
           label={t("name")}
@@ -64,7 +59,7 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
           maxLength={60}
           onChange={(event) => setName(event.target.value)}
         />
-        <Button type="submit" quiet disabled={pending}>
+        <Button type="submit" disabled={pending}>
           {pending ? t("creating") : t("create")}
         </Button>
       </Form>
@@ -76,13 +71,6 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
           <CopyBlock key={`command-${fresh.key}`} label={t("command")} action={t("copyCommand")} value={`py -m aw_client timelog --url ${siteUrl} --key ${fresh.key}`} />
         </Stack>
       ) : null}
-      <Stack gap={2}>
-        <Text>{t("claudeTitle")}</Text>
-        <Text as="p" variant="meta">{t("claudeIntro")}</Text>
-        <CopyBlock key={`address-${mcpUrl}`} label={t("claudeAddress")} action={t("copyAddress")} value={mcpUrl} />
-        <CopyBlock key={`claude-${claudeKey}`} label={t("claudeCommand")} action={t("copyClaudeCommand")} value={`claude mcp add --transport http timelog ${mcpUrl} --header "Authorization: Bearer ${claudeKey}"`} />
-        <Text as="p" variant="meta">{fresh === null ? t("claudeKeyHint") : t("claudeAsk")}</Text>
-      </Stack>
       {keys.length === 0 ? (
         <Text as="p" variant="meta">{t("none")}</Text>
       ) : (
@@ -112,11 +100,22 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
           ))}
         </Stack>
       )}
+      <Stack gap={1}>
+        <Text as="p">{t("install")}</Text>
+        <TextLink button href={INSTALLER_URL}>{t("download")}</TextLink>
+      </Stack>
+      <Disclosure summary={<Text>{t("claudeTitle")}</Text>}>
+        <Stack gap={2}>
+          <Text as="p" variant="meta">{t("claudeIntro")}</Text>
+          <CopyBlock key={`claude-${claudeKey}`} label={t("claudeCommand")} action={t("copyClaudeCommand")} value={`claude mcp add --transport http timelog ${mcpUrl} --header "Authorization: Bearer ${claudeKey}"`} />
+          {fresh === null ? <Text as="p" variant="meta">{t("claudeKeyHint")}</Text> : null}
+        </Stack>
+      </Disclosure>
     </Stack>
   );
 }
 
-// One block and the button that copies exactly it.
+// One block and the button that copies exactly it, on one row.
 function CopyBlock({ label, action, value }: { label: string; action: string; value: string }) {
   const t = useTranslations("time.keys");
   const [copied, setCopied] = useState<boolean | "failed">(false);
@@ -132,15 +131,15 @@ function CopyBlock({ label, action, value }: { label: string; action: string; va
   }
 
   return (
-    <CodeBlock>
-      <Between>
-        <Text variant="meta">{label}</Text>
+    <Stack gap={1}>
+      <Text variant="meta">{label}</Text>
+      <CodeBlock row>
+        <Code>{value}</Code>
         <Button type="button" quiet onClick={copy} aria-label={action}>
           {copied === true ? t("copied") : t("copy")}
         </Button>
-      </Between>
-      <Code>{value}</Code>
+      </CodeBlock>
       {copied === "failed" ? <Text as="p">{t("copyFailed")}</Text> : null}
-    </CodeBlock>
+    </Stack>
   );
 }

@@ -1,3 +1,5 @@
+import { appName } from "@/lib/app-names";
+import type { DayApp } from "@/lib/queries";
 import { addDays, isCivilDay } from "@/lib/zone";
 
 // Monday 0 to Sunday 6.
@@ -43,20 +45,28 @@ export function clampWeek(monday: string, firstDay: string | null, today: string
   return monday > last ? last : monday;
 }
 
-export type StripDay = { day: string; reachable: boolean; current: boolean; uploaded: boolean };
+// The week's days in whole minutes, floored as each day's own screen floors them, and their total: the sum of those
+// minutes, so the seven figures on «Semana» always add up to the one beside them.
+export function weekMinutes(seconds: number[]): { minutes: number[]; total: number } {
+  const minutes = seconds.map((one) => Math.floor(one / 60));
+  return { minutes, total: minutes.reduce((sum, one) => sum + one, 0) };
+}
 
-// The strip of a day's week (Monday to Sunday): which days there is a screen for (the first upload to today), the
-// current one, which of them an upload reached (`uploaded` holds those days), and where ‹ › land: the same weekday a week
-// away, held inside the span; null where there is no such week.
-export function dayStrip(day: string, firstDay: string | null, today: string, uploaded: ReadonlySet<string>): { monday: string; days: StripDay[]; prev: string | null; next: string | null } {
-  const monday = mondayOf(day);
-  const first = firstDay ?? today;
-  const prev = addDays(day, -7);
-  const next = addDays(day, 7);
-  return {
-    monday,
-    days: daysOfWeek(monday).map((one) => ({ day: one, reachable: one >= first && one <= today, current: one === day, uploaded: uploaded.has(one) })),
-    prev: monday > mondayOf(first) ? (prev < first ? first : prev) : null,
-    next: monday < mondayOf(today) ? (next > today ? today : next) : null,
-  };
+export type WeekApp = { app: string; total: number; perDay: number[] };
+
+// The week's apps under their readable names (two processes with one name add up, Windows' noise is `systemName`),
+// longest first, each with its seconds on every one of `days`.
+export function appsOfWeek(rows: DayApp[], days: string[], systemName: string): WeekApp[] {
+  const byApp = new Map<string, number[]>();
+  for (const one of rows) {
+    const index = days.indexOf(one.day);
+    if (index < 0) continue;
+    const name = appName(one.app, systemName);
+    const perDay = byApp.get(name) ?? days.map(() => 0);
+    perDay[index] += one.seconds;
+    byApp.set(name, perDay);
+  }
+  return [...byApp]
+    .map(([app, perDay]) => ({ app, perDay, total: perDay.reduce((sum, one) => sum + one, 0) }))
+    .sort((a, b) => b.total - a.total || a.app.localeCompare(b.app));
 }

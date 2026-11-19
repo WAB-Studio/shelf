@@ -37,8 +37,6 @@ jobs:
       - run: npx next typegen
         working-directory: apps/wordbook
       - run: npx next typegen
-        working-directory: apps/goallog
-      - run: npx next typegen
         working-directory: apps/timelog
       - run: npm run typecheck
         if: ${{ !cancelled() }}
@@ -47,8 +45,6 @@ jobs:
       - run: npm run check:dict -w apps/wordbook
         if: ${{ !cancelled() }}
       - run: npm run check:unit -w apps/wordbook
-        if: ${{ !cancelled() }}
-      - run: npm run check:unit -w apps/goallog
         if: ${{ !cancelled() }}
       - run: npm run check:unit -w apps/timelog
         if: ${{ !cancelled() }}
@@ -99,29 +95,6 @@ jobs:
       - run: node --import tsx --env-file=.env.local scripts/check-budget.ts
         working-directory: apps/wordbook
 
-  # Drives the `goals` policies against the real database, exactly as
-  # `policies` does for `reading` — one transaction that always rolls back,
-  # so it leaves no row. The npm script sets its own NODE_PATH.
-  pulsar-policies:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.pulsar == 'true'
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - uses: ./.github/actions/npm-install
-      # `check:policies` reads `--env-file=.env.local`, which the action writes.
-      - uses: ./.github/actions/supabase-local
-        with:
-          apps: goallog
-      - run: npm run check:policies -w apps/goallog
-      - run: npm run check:allow-email -w apps/goallog
-      - run: npm run check:sign-in -w apps/goallog
-
   # TimeLog's policies, its key functions and the upload, driven against the real
   # database (RNT-01, RNT-02). Every row it writes belongs to users it makes and drops.
   timelog-db:
@@ -155,7 +128,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       orbit: ${{ steps.filter.outputs.orbit }}
-      pulsar: ${{ steps.filter.outputs.pulsar }}
       voyager: ${{ steps.filter.outputs.voyager }}
     steps:
       - uses: actions/checkout@v7
@@ -170,7 +142,6 @@ jobs:
         run: |
           # `packages/` and the lockfile reach both apps; so does this workflow.
           orbit_paths="apps/homefund packages package-lock.json .github/workflows/ci.yml"
-          pulsar_paths="apps/goallog packages package-lock.json .github/workflows/ci.yml"
           voyager_paths="apps/wordbook packages package-lock.json .github/workflows/ci.yml"
           # Pull request: against its base. Push to `integracion`: against the
           # tip before it. Dispatch on a branch: against where it left
@@ -191,7 +162,6 @@ jobs:
           fi
           if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
             echo "orbit=true" >> "$GITHUB_OUTPUT"
-            echo "pulsar=true" >> "$GITHUB_OUTPUT"
             echo "voyager=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -199,11 +169,6 @@ jobs:
             echo "orbit=false" >> "$GITHUB_OUTPUT"
           else
             echo "orbit=true" >> "$GITHUB_OUTPUT"
-          fi
-          if git diff --quiet "$BASE_SHA" HEAD -- $pulsar_paths; then
-            echo "pulsar=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "pulsar=true" >> "$GITHUB_OUTPUT"
           fi
           if git diff --quiet "$BASE_SHA" HEAD -- $voyager_paths; then
             echo "voyager=false" >> "$GITHUB_OUTPUT"
@@ -260,294 +225,12 @@ jobs:
       # that queries is dynamic. It is the compile that has to be proven here.
       - run: npm run build -w apps/homefund
 
-  # `next build` for pulsar runs nowhere else since it ships production-only,
-  # same as orbit. Pull requests only: `pulsar-e2e` and `pulsar-checks` build
-  # the same tree on a push, so a second build there proves nothing new.
-  build-pulsar:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      needs.changes.outputs.pulsar == 'true'
-    timeout-minutes: 15
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - uses: ./.github/actions/npm-install
-
-      # Named here, or an empty secret surfaces inside the build as a Zod error on
-      # a variable nobody set and reads like the schema broke.
-      - name: Name any secret the build needs and does not have
-        run: |
-          missing=""
-          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
-                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
-            [ -n "${!name}" ] || missing="$missing $name"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::missing repository secrets:$missing"
-            exit 1
-          fi
-
-      - run: npm run build -w apps/goallog
-
-  # `apps/goallog`'s own browser suite, against `next build && next start` —
-  # never `next dev`, for the reason `playwright.config.ts`'s own head gives.
-  # Its own lane (8: local lanes are 1-5, orbit's CI lane is 9). The stack is
-  # the runner's own, so no group serialises its runs.
-  # Push only: on a pull request it is informative. The workflow's concurrency
-  # group cancels the older run of a ref, so only its newest tip is proved.
-  pulsar-e2e:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: github.event_name != 'pull_request' && needs.changes.outputs.pulsar == 'true'
-    # The suite is about two minutes; `playwright install --with-deps` alone
-    # took eight on 2026-09-30, when apt was slow.
-    timeout-minutes: 30
-    # Each shard owns a runner and so a stack and a database of its own; the
-    # lane stays 8 in all six. Four shards finished 4 to 8 minutes apart
-    # (run 38662737576); past six, `pulsar-checks` and orbit's `e2e` set the
-    # wall time. `pulsar-e2e-report` merges what they leave.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6]
-    env:
-      HARNESS_LANE: 8
-      SHARD_TOTAL: 6
-      PULSAR_BASE_URL: http://localhost:3207
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - uses: ./.github/actions/npm-install
-
-      # `check:e2e` and the harness scripts its global setup spawns all read
-      # `--env-file=.env.local`, which the action writes.
-      - uses: ./.github/actions/supabase-local
-        with:
-          apps: goallog
-      - uses: ./.github/actions/playwright-chromium
-      - run: sudo apt-get install -y poppler-utils
-
-      - run: npm run build -w apps/goallog
-
-      # `--port` explicitly: the `start` script is a bare `next start`, which
-      # defaults to 3000 — only `dev` carries `--port ${PORT:-3200}`.
-      - name: Start the app and wait for it to answer
-        run: |
-          npm run start -w apps/goallog -- --port 3207 > /tmp/pulsar.log 2>&1 &
-          for _ in $(seq 1 60); do
-            if curl -sf -o /dev/null http://localhost:3207/; then
-              echo "up after ${SECONDS}s"; exit 0
-            fi
-            sleep 2
-          done
-          echo "the server never answered"; tail -50 /tmp/pulsar.log; exit 1
-
-      # Same build, a Postgres nothing listens on: the process env wins over
-      # `.env.local`. `/entrar` is static, so it answers without the database.
-      - name: Start the app with an unreachable database and wait for it to answer
-        run: |
-          DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:1/postgres \
-            npm run start -w apps/goallog -- --port 3217 > /tmp/pulsar-down.log 2>&1 &
-          for _ in $(seq 1 60); do
-            if curl -sf -o /dev/null http://localhost:3217/entrar; then
-              echo "up after ${SECONDS}s"; exit 0
-            fi
-            sleep 2
-          done
-          echo "the down server never answered"; tail -50 /tmp/pulsar-down.log; exit 1
-
-      # Same build, every `reading_lookups` read rejecting
-      # (`apps/goallog/lib/evidence/fault-seam.ts`), for `fuente-caida.spec.ts`.
-      # Never set in `build-pulsar`, `pulsar-checks` or on Vercel.
-      - name: Start the app with an unreadable evidence source and wait for it to answer
-        run: |
-          PULSAR_FAULT_SEAM=reading_lookups \
-          PULSAR_MODEL_STUB=draft:${{ github.workspace }}/apps/goallog/e2e/data/modelo-borrador.json \
-          PULSAR_CHAT_STUB=script:${{ github.workspace }}/apps/goallog/e2e/data/chat-guion.json \
-          OPENAI_API_KEY=sk-stub \
-            npm run start -w apps/goallog -- --port 3227 > /tmp/pulsar-fault.log 2>&1 &
-          for _ in $(seq 1 60); do
-            if curl -sf -o /dev/null http://localhost:3227/entrar; then
-              echo "up after ${SECONDS}s"; exit 0
-            fi
-            sleep 2
-          done
-          echo "the fault server never answered"; tail -50 /tmp/pulsar-fault.log; exit 1
-
-      # Its global setup (`scripts/harness/e2e-run.ts`) opens the one harness
-      # run, mints and seeds lane 8's person under it — no typed address, no
-      # email sent (RNP-09) — and its teardown drops every identity and closes
-      # the run.
-      - name: Run shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }}, caida and fuente projects included
-        env:
-          PULSAR_DOWN_BASE_URL: http://localhost:3217
-          PULSAR_FAULT_BASE_URL: http://localhost:3227
-        run: npm run check:e2e -w apps/goallog -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
-
-      - name: Upload the blob report
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: pulsar-blob-${{ matrix.shard }}
-          path: apps/goallog/blob-report
-          retention-days: 3
-
-      - name: Upload the server log
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: pulsar-log-${{ matrix.shard }}
-          path: /tmp/pulsar.log
-
-      - name: Upload the down server log
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: pulsar-down-log-${{ matrix.shard }}
-          path: /tmp/pulsar-down.log
-
-      - name: Upload the fault server log
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: pulsar-fault-log-${{ matrix.shard }}
-          path: /tmp/pulsar-fault.log
-
-      - name: Upload the Playwright artefacts
-        if: failure()
-        uses: actions/upload-artifact@v5
-        with:
-          name: pulsar-playwright-results-${{ matrix.shard }}
-          path: apps/goallog/private/playwright-results
-
-  # One check name for the suite: red when any shard is, green when all are.
-  # `always()` so a red shard still gets its report merged.
-  pulsar-e2e-report:
-    runs-on: ubuntu-latest
-    needs: pulsar-e2e
-    if: always() && needs.pulsar-e2e.result != 'skipped'
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - uses: ./.github/actions/npm-install
-
-      - uses: actions/download-artifact@v5
-        with:
-          pattern: pulsar-blob-*
-          path: apps/goallog/all-blobs
-          merge-multiple: true
-
-      - name: Merge the shards' reports
-        run: npx playwright merge-reports --reporter html,list ./all-blobs
-        working-directory: apps/goallog
-
-      - uses: actions/upload-artifact@v5
-        if: always()
-        with:
-          name: pulsar-e2e-report
-          path: apps/goallog/playwright-report
-
-      - name: Fail when a shard failed
-        if: needs.pulsar-e2e.result != 'success'
-        run: |
-          echo "pulsar-e2e: ${{ needs.pulsar-e2e.result }}"
-          exit 1
-
-  # `check:day`, `check:goal`, `check:goal-actions` and `check:plan` under one harness run of
-  # their own, then `check:mcp` on a session of its own (`scripts/harness/checks-run.ts`), never `pulsar-e2e`'s person:
-  # its teardown drops it. A job of its own so the two run side by side. Lane
-  # 7: local lanes are 1-5, `pulsar-e2e` is 8, orbit's `e2e` is 9, so the
-  # shared `harness-member-7` never meets another job's seeds.
-  pulsar-checks:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
-      needs.changes.outputs.pulsar == 'true'
-    timeout-minutes: 25
-    env:
-      HARNESS_LANE: 7
-      PULSAR_BASE_URL: http://localhost:3206
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - uses: ./.github/actions/npm-install
-
-      # Orbit is there for `harness:token`.
-      - uses: ./.github/actions/supabase-local
-        with:
-          apps: goallog homefund
-
-      # Creates or refreshes lane 7's shared pair; idempotent.
-      - run: npm run harness:token -w apps/homefund
-
-      - run: npm run check:e2e-static -w apps/goallog
-
-      - run: npm run build -w apps/goallog
-
-      - name: Start the app and wait for it to answer
-        run: |
-          # `check:mcp` reads this log at `private/dev3206.log` and asserts an `[outbound]` line
-          # that only this fetch hook writes.
-          mkdir -p apps/goallog/private
-          NODE_OPTIONS='--import data:text/javascript,const%20f=fetch;globalThis.fetch=(i,o)=>{console.log(%22[outbound]%22,String(i.url??i));return%20f(i,o)}' \
-            npm run start -w apps/goallog -- --port 3206 > apps/goallog/private/dev3206.log 2>&1 &
-          for _ in $(seq 1 60); do
-            if curl -sf -o /dev/null http://localhost:3206/; then
-              echo "up after ${SECONDS}s"; exit 0
-            fi
-            sleep 2
-          done
-          echo "the server never answered"; tail -50 apps/goallog/private/dev3206.log; exit 1
-
-      - name: Run the four checks under one harness run
-        working-directory: apps/goallog
-        run: node --import tsx --env-file=.env.local scripts/harness/checks-run.ts
-
-      # `route.ts` reads `private/session-7.json`, which `checks-run.ts` drops with its run;
-      # a bare mint leaves a session of its own for this step.
-      - name: Run check:mcp
-        if: ${{ !cancelled() }}
-        run: |
-          npm run harness:mint-session -w apps/goallog
-          npm run check:mcp -w apps/goallog
-
-      - name: Upload the server log
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: pulsar-checks-log
-          path: apps/goallog/private/dev3206.log
-
   # HomeFund's three scripts against the local stack, none of them in any other
   # job. `db:check-rls` and `check:queries` open their own connection;
   # `check:http` drives a dev server like the `e2e` job's. Its RNF-09 verdict is
   # a SKIP here by design: it needs a year of movements (`seed:year`) and
   # `HARNESS_TARGET`, and neither is set, so the timing is only reported. Lane 10:
-  # 7 is pulsar-checks, 8 pulsar-e2e, 9 e2e. Not required by `main`.
+  # 9 is e2e. Not required by `main`.
   orbit-checks:
     runs-on: ubuntu-latest
     needs: changes

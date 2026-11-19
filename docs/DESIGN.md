@@ -135,7 +135,7 @@ highlight, a white ground, pill buttons), with HomeFund's own palette and faces.
 - **A planned payment's reminder notifies by email** (RF-74's reminder date). It spends the free Auth email quota. Not built yet.
 - **The backup restores everything:** budgets, goals, debts, statements and labels, beside what RF-50 exports today. RF-50 needs a successor code that exports all of it. Not built yet.
 - **HomeFund gets WordBook's email deliverability guard and its sign-in link cap,** under a new RF code; it changes the surroundings of RF-01. Not built yet.
-- **Bank statements are imported through an MCP server that Claude drives,** following GoalLog's MCP pattern: the person hands the file to Claude in a conversation, Claude reads it, calls a preview tool, the person confirms, then an import tool writes. No paid model runs inside the app. The preview is mandatory, and a re-import of the same statement never duplicates movements (RF-134's source reference is the key). Earlier statements serve as examples, never as a template. Not built yet.
+- **Bank statements are imported through an MCP server that Claude drives,** the person hands the file to Claude in a conversation, Claude reads it, calls a preview tool, the person confirms, then an import tool writes. No paid model runs inside the app. The preview is mandatory, and a re-import of the same statement never duplicates movements (RF-134's source reference is the key). Earlier statements serve as examples, never as a template. Not built yet.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
 
 ## Boards of T4, drawn 2026-10-17 (canvas «HomeFund», page «T4 · pantallas»)
@@ -189,7 +189,7 @@ Board «LoginCódigo», HomeFund, 360 and 1280, inside the existing `Card`. Deci
   another.» / «Too many tries with the code. Wait a few minutes.» / «The email also has a link: open it in this
   browser. If nothing arrives in a few minutes, check your spam folder.» / «Send code» / «Sending the code» / «We send
   you a code to sign in without a password.»
-- **The mail is shared by HomeFund, WordBook and GoalLog:** one template, no app name. Subject «Tu código para entrar:
+- **The mail is shared by HomeFund and WordBook:** one template, no app name. Subject «Tu código para entrar:
   {{ .Token }}». The code is drawn with the example 482913 in place of `{{ .Token }}`. The link beside the code is
   `{{ .ConfirmationURL }}`, the PKCE link: it works only in the browser that asked. The text part carries the link as a
   bare URL. The subject is painted by the mail client and is not part of the body.
