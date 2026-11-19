@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 
 // RT-29: on «Hoy» the person sees where the day went at once: the app list starts inside the first screen of a phone and of
-// a desktop. RT-30: no screen scrolls sideways. A made-up person is seeded through /api/ingest and removed after.
+// a desktop. RT-30: no screen scrolls sideways. RT-34: the desktop is two columns beside a sidebar. A made-up person is seeded through /api/ingest and removed after.
 const base = process.env.HARNESS_BASE_URL ?? "http://localhost:3300";
 const email = `e2e-${randomUUID()}@example.invalid`;
 const sql = postgres(process.env.DATABASE_URL ?? "", { prepare: false, max: 1, onnotice: () => {} });
@@ -69,6 +69,22 @@ for (const width of [360, 390, 820, 1440]) {
     }
   });
 }
+
+test("at 1440 the sections sit beside the sidebar, Sitios beside Apps, and the week's days side by side", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  const nav = await page.getByRole("navigation").boundingBox();
+  const apps = await page.locator("section", { has: page.getByRole("heading", { name: "Apps" }) }).boundingBox();
+  const sites = await page.locator("section", { has: page.getByRole("heading", { name: /^(Sitios|Sites)$/ }) }).boundingBox();
+  expect(nav!.x + nav!.width).toBeLessThanOrEqual(apps!.x);
+  expect(sites!.x).toBeGreaterThanOrEqual(apps!.x + apps!.width);
+  expect(sites!.y).toBeLessThan(apps!.y + apps!.height);
+  await page.goto("/semana");
+  const days = page.locator("main ol > li");
+  await expect(days).toHaveCount(7);
+  const [monday, sunday] = await Promise.all([days.first().boundingBox(), days.last().boundingBox()]);
+  expect(Math.abs(monday!.y - sunday!.y)).toBeLessThan(2);
+});
 
 test("Semana has no heatmap and names its week's days as rows", async ({ page }) => {
   await signIn(page);

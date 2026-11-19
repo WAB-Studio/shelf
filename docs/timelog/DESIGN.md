@@ -1,10 +1,26 @@
 # TimeLog — design guide
 
-Governs `apps/timelog` alone. «Menos (2026-11-19)» is the newest word on every screen; older sections carry a note of what it replaced. No pattern crosses over from HomeFund or WordBook because it
+Governs `apps/timelog` alone. «Escritorio (2026-11-19)» is the newest word on the desktop and «Menos (2026-11-19)» under 1100; older sections carry a note of what it replaced. No pattern crosses over from HomeFund or WordBook because it
 exists next door.
 
 Written 2026-10-28 for P5. The user has not seen it drawn yet: the first screen built is the first
 look, and these words change with what they say.
+
+## Escritorio (2026-11-19)
+
+Decided by the user: «la UI es para mobile, no me importa mobile, debemos hacer un buen diseño para desktop y luego adaptamos
+mobile» (RT-34). The desktop is drawn first; from 1100 it wins over «Menos» on width. Under 1100 «Menos» holds as written.
+
+- **Sidebar.** 232 wide, raised ground, a 1px track border at its right, sticky at full height: the logo and «TimeLog», then
+  «Hoy», «Semana», «Llaves» stacked as pills aligned left, the language switch at its foot.
+- **Width.** The screen beside the sidebar runs to 1440, 48 from the right edge. «Llaves» and «Exportar» keep 760 at the left.
+- **Top line.** The title at the left (34), the total under it in mono (18, muted), «Actualizado hace…» under that; ‹ and ›
+  together at the right, an empty place kept where one is missing.
+- **Two columns** (3fr and 2fr, 32 apart) under the class bar: Apps in the wide one; Sitios, Proyectos and «Claude» in the
+  narrow one. A section in a column is a raised panel, radius 16, 20/24 inside. «Claude» is a titled section like the others; its
+  line drops the «Claude:» it no longer needs.
+- **«Semana».** The seven days stand side by side: a 160-tall bar each against the week's longest day, the day's name and its
+  figure under it; a day not reached is dimmed and reads «—». On the phone they stay rows.
 
 ## Menos (2026-11-19)
 
