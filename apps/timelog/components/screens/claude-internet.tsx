@@ -77,7 +77,7 @@ export async function ProjectBars({ projects, words }: { projects: ProjectTime[]
 export async function SiteBars({ sites, words, detail }: { sites: SiteTime[]; words: Words; detail?: (host: string) => ReactNode }) {
   const t = await getTranslations("time.internet");
   const row = (one: SiteTime): BarRow => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: detail?.(one.host) });
-  return <BarRows tone="browser" of={sites[0]?.seconds} {...capped(sites, ROWS_SHOWN, row, (rest) => t("more", { n: rest.length, duration: words.duration(sum(rest)) }))} />;
+  return <BarRows of={sites[0]?.seconds} {...capped(sites, ROWS_SHOWN, row, (rest) => t("more", { n: rest.length, duration: words.duration(sum(rest)) }))} />;
 }
 
 // «Internet» of one day (RT-13): the longest hostnames, each opening onto its pages.
@@ -93,7 +93,6 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
     const of = sites.find((one) => one.host === host)?.seconds;
     return (
       <BarRows
-        tone="browser"
         of={of}
         rows={mine.slice(0, ROWS_SHOWN).map(pageRow)}
         overflow={mine.length > ROWS_SHOWN ? { summary: t("pagesMore", { n: mine.length - ROWS_SHOWN }), rows: mine.slice(ROWS_SHOWN).map(pageRow) } : undefined}

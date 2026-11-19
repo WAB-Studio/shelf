@@ -102,6 +102,13 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
 - [x] **RT-27** «Llaves» has a «Conectar Claude» section: the MCP server's address (`/mcp` on the app's own address), a
   block to copy that adds it to Claude Code with the key in the `Authorization: Bearer` header (the key just created, else
   a placeholder), and a line on what to ask. A key revoked on the screen leaves it at once, with its commands. (2026-11-08)
+- [ ] **RT-28** The day's time is split into nine classes, each written wherever it shows: Programar, IA, Reuniones y
+  trabajo, Mensajes, Juegos, Videos y redes, Compras y pagos, Sistema, Otras. An app takes its class by its readable
+  name; a game is also any `*-Win64-Shipping` process, and `javaw` is Minecraft. A browser's seconds are not one class:
+  they are split across the classes of the day's sites (RT-13) in proportion to each site's seconds, a site matching by
+  host with a subdomain taking its parent's rule. The browser time no site accounts for counts in Otras. The day's class
+  strip and the week's heatmap use this split; the browser's own row stays in Apps, drawn in its sites' main class.
+  Extends RT-04, RT-05 and RT-13. (2026-11-19, «si se ve bien»)
 
 ### Non-functional requirements
 

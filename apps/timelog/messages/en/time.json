@@ -189,10 +189,13 @@
     "session": "{project}: from {from} to {to}"
   },
   "classes": {
-    "code": "Code",
-    "browser": "Browser",
-    "comms": "Communication",
-    "leisure": "Leisure",
+    "code": "Programming",
+    "ai": "AI",
+    "work": "Meetings and work",
+    "messages": "Messages",
+    "games": "Games",
+    "social": "Video and social",
+    "shopping": "Shopping and payments",
     "system": "System",
     "other": "Other"
   }

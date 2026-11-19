@@ -126,9 +126,12 @@
 
 /* A tone sets the colour of what it holds; on the brand block it reads its on-block value. */
 .tone_code { --tone: var(--tl-tone-code); --tone-block: var(--tl-tone-code-on-block); }
-.tone_browser { --tone: var(--tl-tone-browser); --tone-block: var(--tl-tone-browser-on-block); }
-.tone_comms { --tone: var(--tl-tone-comms); --tone-block: var(--tl-tone-comms-on-block); }
-.tone_leisure { --tone: var(--tl-tone-leisure); --tone-block: var(--tl-tone-leisure-on-block); }
+.tone_ai { --tone: var(--tl-tone-ai); --tone-block: var(--tl-tone-ai-on-block); }
+.tone_work { --tone: var(--tl-tone-work); --tone-block: var(--tl-tone-work-on-block); }
+.tone_messages { --tone: var(--tl-tone-messages); --tone-block: var(--tl-tone-messages-on-block); }
+.tone_games { --tone: var(--tl-tone-games); --tone-block: var(--tl-tone-games-on-block); }
+.tone_social { --tone: var(--tl-tone-social); --tone-block: var(--tl-tone-social-on-block); }
+.tone_shopping { --tone: var(--tl-tone-shopping); --tone-block: var(--tl-tone-shopping-on-block); }
 .tone_system { --tone: var(--tl-tone-system); --tone-block: var(--tl-tone-system-on-block); }
 .tone_other { --tone: var(--tl-tone-other); --tone-block: var(--tl-tone-other-on-block); }
 .tone_claude { --tone: var(--tl-tone-claude); --tone-block: var(--tl-tone-claude-on-block); }

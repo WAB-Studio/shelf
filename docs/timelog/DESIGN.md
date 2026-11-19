@@ -11,8 +11,8 @@ look, and these words change with what they say.
 Sand that fell. The screen says how much and where, and judges nothing.
 
 - **No goal, no target, no colour for too much.** An hour on a game and an hour on an editor are
-  drawn the same length. Ranking is by length alone. Since 2026-10-31 a class (Código, Navegador, Comunicación,
-  Ocio, Sistema, Otras) colours the bar: classes describe where the time went, never grade it, and no class is
+  drawn the same length. Ranking is by length alone. Since 2026-10-31 a class (Programar, IA, Reuniones y trabajo,
+  Mensajes, Juegos, Videos y redes, Compras y pagos, Sistema, Otras) colours the bar: classes describe where the time went, never grade it, and no class is
   louder than another.
 - **Dark is the primary face**, as a screen read at the end of a day at the computer. Light is the
   same design inverted.
@@ -122,10 +122,17 @@ The third critique («Creo que podemos mejorar más, ¿no?»), from `private/rep
 
 - **P1.** The hourly line uses Claude Code sessions alone, the only thing that carries a time of day. No contract
   change; the apps get no «when» (RT-16).
-- **P2.** Neutral classes with fixed colours: Código (cyan), Navegador (blue), Comunicación (violet), Ocio (pink),
-  Sistema (slate), Otras (sand). Claude keeps its own orange, in three shades for Claude Code, claude.ai and the app.
-  The class is always written (legend, row names, cell figures), never colour alone. This replaces «judges nothing» as
-  «classes describe, never grade».
+- **P2.** Neutral classes with fixed colours (RT-28, 2026-11-19, replacing the six of 2026-10-31): Programar (cyan),
+  IA (emerald), Reuniones y trabajo (violet), Mensajes (blue), Juegos (pink), Videos y redes (lime), Compras y pagos
+  (fuchsia), Sistema (slate), Otras (sand). Claude keeps its own orange, in three shades for Claude Code, claude.ai and
+  the app. The class is always written (legend, row names, cell figures), never colour alone. This replaces «judges
+  nothing» as «classes describe, never grade». The browser is no class: its time is split by the day's sites, and its
+  row in Apps draws in its sites' main class.
+  Contrast, dark: on the ground / on raised / on the block, ink #0c0e11 on it: Programar 10.69/9.68/7.82 (ink 10.69),
+  IA 10.05/9.10/7.35, Reuniones 7.10/6.43/5.19, Mensajes 7.60/6.88/5.56, Juegos 7.30/6.60/5.33, Videos y redes
+  12.82/11.60/9.37, Compras 7.85/7.11/5.74, Sistema 6.77/6.13/4.95, Otras 8.59/7.78/6.28.
+  Light, on the ground / on raised (ink #f6f8fa on it equals the ground figure): 6.05/5.47, 5.88/5.31, 5.51/4.98,
+  5.66/5.11, 5.67/5.12, 6.26/5.66, 5.94/5.37, 5.91/5.34, 5.57/5.03, in the same order.
 - **P3.** When more than one device uploaded a day, the block names its total as a sum and lists each device's total.
 - **P4.** «Exportar» lives inside «Semana» (a link under the heatmap; `/exportar` keeps its address and marks
   «Semana» current): three tabs, «Hoy», «Semana», «Llaves».
