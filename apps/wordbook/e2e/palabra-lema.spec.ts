@@ -23,7 +23,7 @@ async function gotoReady(page: Page): Promise<void> {
 }
 
 async function search(page: Page, text: string): Promise<void> {
-  await page.getByRole("textbox", { name: messages.search.label }).fill(text);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(text);
 }
 
 // A translations line holds the sense's main gloss, then the others after « · ».

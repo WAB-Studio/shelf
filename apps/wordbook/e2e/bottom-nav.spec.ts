@@ -121,7 +121,7 @@ test("Buscar carries the query past a trip through Registro, unretyped", async (
 
   await nav().getByRole("link", { name: messages.nav.search }).click();
   await expect(page).toHaveURL(/\?q=book$/);
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toHaveValue("book");
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toHaveValue("book");
 });
 
 test("all three routes still draw the bar at 360px, with no horizontal overflow", async ({ page }) => {
@@ -177,7 +177,7 @@ test("returning through the bar does not record the restored query again", async
   await assetResponse;
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
-  await page.getByRole("textbox", { name: messages.search.label }).fill("manures");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("manures");
   await expect(page).toHaveURL(/q=manures/);
 
   const nav = () => page.getByRole("navigation", { name: messages.nav.label });

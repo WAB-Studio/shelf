@@ -33,7 +33,7 @@ test("pressing back after one lookup keeps the app open and empties the box", as
   await deleteTranslator(page);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("book");
   await expect(page.getByRole("heading", { name: "book" })).toBeVisible({ timeout: 5000 });
   await expect(page).toHaveURL(/q=book/);
@@ -52,7 +52,7 @@ test("three lookups in a row leave three stops for back to walk, in order", asyn
   await deleteTranslator(page);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   await searchBox.fill("book");
   await expect(page.getByRole("heading", { name: "book" })).toBeVisible({ timeout: 5000 });
@@ -92,7 +92,7 @@ test("opening /?q=achievement cold answers it with no typing", async ({ page }) 
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await expect(searchBox).toHaveValue("achievement");
   await expect(page.getByRole("heading", { name: "achievement" })).toBeVisible({ timeout: 5000 });
 });
@@ -114,7 +114,7 @@ test("typing ten letters adds one history entry, not ten", async ({ page }) => {
   await deleteTranslator(page);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const before = await page.evaluate(() => window.history.length);
 
   await searchBox.pressSequentially("throughout", { delay: 30 });
@@ -134,7 +134,7 @@ test("no request leaves the device while typing, past the dictionary asset itsel
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.pressSequentially("achievement", { delay: 30 });
   await expect(page.getByRole("heading", { name: "achievement" })).toBeVisible({ timeout: 5000 });
 

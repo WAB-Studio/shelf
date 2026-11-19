@@ -282,7 +282,7 @@ async function dictionaryReady(page: Page): Promise<void> {
 // Types `word`, waits for its dictionary answer to be on screen — only then
 // has `recordLookup` been handed the row — and returns the box.
 async function searchFor(page: Page, word: string): Promise<Locator> {
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(word);
   const translations = dictionaryTranslations(word);
   expect(translations.length, `the shipped dictionary carries no entry for "${word}"`).toBeGreaterThan(0);
@@ -408,7 +408,7 @@ test("a reader who only ever missed leaves one pending row per word the network 
   // (the stubbed route answers 204, so no answer arrives). A multi-character
   // nonsense string, not a single letter, so it stays a miss regardless of
   // the other lane's own change to one-character queries.
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("xyzzy");
   await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
   await searchBox.fill("");

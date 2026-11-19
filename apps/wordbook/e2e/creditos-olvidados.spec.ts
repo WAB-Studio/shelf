@@ -72,7 +72,7 @@ test("a device with no reading-credits database never opens or creates one while
   await page.goto("/");
   await assetResponse;
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
 
@@ -125,7 +125,7 @@ test("with indexedDB unreachable the search box appears with no console error", 
 
   await page.goto("/");
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await expect(searchBox).toBeVisible();
 
   expect(pageErrors).toEqual([]);

@@ -80,7 +80,7 @@ function copyOn(): SyncState {
 // Seeds from "/": /registro reads `sync` on mount and would race this write.
 async function seed(page: Page, rows: { sync?: SyncState; lookups?: SeedLookup[] }): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {

@@ -67,7 +67,7 @@ test("from 1280px the main screen is a reading column and a 320px margin, both r
   const navBox = await page.getByRole("navigation", { name: messages.nav.label }).boundingBox();
   const panels = await page.locator("main > div").first().boundingBox();
   const side = await page.locator("main aside").boundingBox();
-  const field = await page.getByRole("textbox", { name: messages.search.label }).boundingBox();
+  const field = await page.getByRole("combobox", { name: messages.search.label }).boundingBox();
   expect(navBox).not.toBeNull();
   expect(panels).not.toBeNull();
   expect(side).not.toBeNull();
@@ -126,7 +126,7 @@ test("RL-97: at 1440px the sidebar sits left of the column, the margin right of 
   const nav = await page.getByRole("navigation", { name: messages.nav.label }).boundingBox();
   const panels = await page.locator("main > div").first().boundingBox();
   const side = await page.locator("main aside").boundingBox();
-  const searchBox = await page.getByRole("textbox", { name: messages.search.label }).boundingBox();
+  const searchBox = await page.getByRole("combobox", { name: messages.search.label }).boundingBox();
   const answer = await page.getByRole("heading", { name: "throughout" }).boundingBox();
   expect(nav).not.toBeNull();
   expect(panels).not.toBeNull();
@@ -160,7 +160,7 @@ test("RL-97: the panel of suggestions answers ↓, Enter and Esc", async ({ page
   await disableTranslator(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  const field = page.getByRole("textbox", { name: messages.search.label });
+  const field = page.getByRole("combobox", { name: messages.search.label });
   await field.fill("throu");
 
   const options = page.getByRole("option");

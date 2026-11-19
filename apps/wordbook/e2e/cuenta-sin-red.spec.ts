@@ -50,7 +50,7 @@ for (const viewport of [
 
     async function seed(page: Page, sync: SyncState | null): Promise<void> {
       await page.goto("/");
-      await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
       await page.evaluate(() => navigator.serviceWorker.ready);
       await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
       await page.evaluate(
@@ -349,7 +349,7 @@ for (const viewport of [
       test("702: leaving /cuenta with the line up drops the listener: online reloads nothing", async ({ page }) => {
         await seed(page, state());
         await page.goto("/");
-        await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+        await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
         await page.evaluate(() => {
           Object.defineProperty(navigator, "onLine", {
             configurable: true,
@@ -361,7 +361,7 @@ for (const viewport of [
         await nav.getByRole("link", { name: messages.nav.account }).click();
         await expect(page.getByText(WITH_TIME("3 horas"), { exact: true })).toBeVisible();
         await nav.getByRole("link", { name: messages.nav.search }).click();
-        await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+        await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
         expect(await alive(page)).toBe(true);
         await page.evaluate(() => sessionStorage.setItem("net-back", "1"));
         const navigations = countNavigations(page);

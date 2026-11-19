@@ -96,7 +96,7 @@ test("a corrupt row crashes /registro, and the bar stays reachable", async ({ pa
     (window as unknown as { __probe: string }).__probe = "still-here";
   });
   await nav.getByRole("link", { name: messages.nav.search }).click();
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __probe?: string }).__probe)).toBe("still-here");
 });
 

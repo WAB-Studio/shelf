@@ -2063,7 +2063,7 @@ Every colour is a token (`--rl-*`); the palette of the same day changes the hexe
   the count of searches is the Veces column, the count of words is «Todas · N». The «Descargas» card is gone.
 - **A row that waits for its answer** (RL-76) says «Sin respuesta todavía» in the translation cell and its explanation under the line.
   A row of several forms lists them under the line. A question (delete) opens under the line, full width.
-- **On a phone** the table is a list: headword over its translation, the menu at the right; Estado, Veces and Hora are not drawn and the
+- **On a phone** the table is a list: headword over its translation, the menu at the right and Veces beside it; Estado and Hora are not drawn and the
   header row is not either.
 
 ### Repaso: one centred column

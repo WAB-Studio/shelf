@@ -132,7 +132,7 @@ const StudyRowItem = memo(function StudyRowItem({
     <Table.Row
       extra={
         hasExtra && (
-          <Flex direction="column" gap="3" align="start" pb="3" px={{ initial: "0", lg: "4" }}>
+          <Flex direction="column" gap="3" align="start" pb="3" px={{ initial: "0", md: "4" }}>
             {waiting && (
               <Text size="2" muted="quietest">
                 {t(row.lastOutcome === "untranslated" ? "study.pendingPhrase" : "study.pendingWord")}

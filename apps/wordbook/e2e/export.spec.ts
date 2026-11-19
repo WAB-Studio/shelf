@@ -192,7 +192,7 @@ test("the nav reaches /registro, which counts what was searched and exports it",
 
   // A lookup typed before the worker is up waits in its queue and answers
   // when it is: the heading below is the wait.
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("apple");
   // A lookup is recorded only once its answer has settled: clearing the box
   // earlier supersedes the query before it resolves, and nothing is logged.
@@ -245,7 +245,7 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
   await page.goto("/");
   await assetResponse;
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const tenKeystrokes = "accountant";
 
   // A warm-up run of the exact same keystrokes first, autocomplete included,
@@ -363,7 +363,7 @@ function copyOn(): SyncState {
 // race this write (same reason as registro-copia.spec.ts).
 async function seedStudy(page: Page, rows: SeedLookup[], sync: SyncState | null = null): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {
@@ -959,7 +959,7 @@ test("RL-92: with the dictionary on the device the card is the app's: part of sp
   await deleteTranslator(page);
   // The box installs the dictionary on the device; the word is then seeded, as a lookup the record kept.
   await page.goto("/");
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await box.fill("tree");
   await expect(page.getByRole("heading", { name: "tree", exact: true })).toBeVisible({ timeout: 15000 });
   await seedStudy(page, [studyRow("tree", "enarbolar, árbol, fuste", NOW + 1_000, { headword: "tree" })]);

@@ -360,7 +360,7 @@ test("a word never searched keeps its own empty copy even when the record holds 
     .click();
   await expect(page).toHaveURL(/\/\?q=zzqqxv$/);
   await expect(
-    page.getByRole("textbox", { name: messages.search.label }),
+    page.getByRole("combobox", { name: messages.search.label }),
   ).toHaveValue("zzqqxv");
 });
 

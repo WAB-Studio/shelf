@@ -518,7 +518,7 @@ export function ReviewSession() {
             {t("show")}
           </Button>
         ) : (
-          <Grid columns="4" gap={{ initial: "2", lg: "3" }}>
+          <Grid columns="4" gap={{ initial: "2", md: "3" }}>
             {GRADES.map((grade, position) => {
               const { unit, count } = intervalUnit(intervals(card, revealedAt)[grade]);
               return (
@@ -537,7 +537,7 @@ export function ReviewSession() {
                       {t(`grade.${grade}`)}
                     </Text>
                     <Text size="1">
-                      <Box as="span" display={{ initial: "none", lg: "inline" }}>
+                      <Box as="span" display={{ initial: "none", md: "inline" }}>
                         {position + 1} ·{" "}
                       </Box>
                       {t(`in.${unit}`, { count })}
@@ -548,7 +548,7 @@ export function ReviewSession() {
             })}
           </Grid>
         )}
-        <Box display={{ initial: "none", lg: "block" }} pt="3">
+        <Box display={{ initial: "none", md: "block" }} pt="3">
           <Flex justify="center">
             <Text variant="caption" muted="quietest">
               {t("keysHint")}

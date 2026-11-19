@@ -56,6 +56,13 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
   const [count, setCount] = useState<CountState>({ kind: "loading" });
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
 
+  // Opening the confirmation moves focus to its title, so the keyboard lands where the question is.
+  const titleRef = useRef<HTMLDivElement>(null);
+  const confirming = stage.kind === "confirming";
+  useEffect(() => {
+    if (confirming) titleRef.current?.focus();
+  }, [confirming]);
+
   // The newest read wins: a reply older than the one in flight never paints.
   const requestIdRef = useRef(0);
 
@@ -161,7 +168,9 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
       <Separator size="4" />
 
       <Flex direction="column" gap="2">
-        <Text variant="breakTitle">{t("confirmTitle")}</Text>
+        <Flex ref={titleRef} tabIndex={-1}>
+          <Text variant="breakTitle">{t("confirmTitle")}</Text>
+        </Flex>
         <Text variant="breakBody" muted>
           {t("confirmBody", { kind: count.entries, words: count.words, lookups: count.lookups })}
         </Text>

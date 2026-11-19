@@ -61,7 +61,7 @@ test("`sternly`'s `-ly` fixes the adjective, so `stern` leads with «severo», n
   await deleteTranslator(page);
   await loadDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("sternly");
   await expect(page.getByRole("heading", { name: "stern", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(glossLocator(page, "severo")).toBeVisible();
@@ -80,7 +80,7 @@ test("`shrieked`'s `-ed` fixes the verb, so `shriek` leads with «chillar», not
   await deleteTranslator(page);
   await loadDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("shrieked");
   await expect(page.getByRole("heading", { name: "shriek", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(glossLocator(page, "chillar")).toBeVisible();
@@ -94,7 +94,7 @@ test("`toiled`'s `-ed` fixes the verb, so `toil` leads with «afanar», not «es
   await deleteTranslator(page);
   await loadDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("toiled");
   await expect(page.getByRole("heading", { name: "toil", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(glossLocator(page, "afanar")).toBeVisible();
@@ -108,7 +108,7 @@ test("`creeping` and `frosted` both fix the verb through `-ing`/`-ed`", async ({
   await deleteTranslator(page);
   await loadDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   await searchBox.fill("creeping");
   await expect(page.getByRole("heading", { name: "creep", exact: true })).toBeVisible({ timeout: 5000 });
@@ -127,7 +127,7 @@ test("an exact query with no inflection keeps today's order, unpinned", async ({
   await deleteTranslator(page);
   await loadDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   await searchBox.fill("bed");
   await expect(page.getByRole("heading", { name: "bed", exact: true })).toBeVisible({ timeout: 5000 });

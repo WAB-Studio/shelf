@@ -86,7 +86,7 @@ test("the translation paints whole before its notes ever answer", async ({ page 
   });
   await waitForDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(phraseText);
 
   // The translation is already whole...
@@ -122,7 +122,7 @@ test("changing the phrase while its notes are in flight never paints the old phr
   });
   await waitForDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(staleText);
   await expect(page.getByText(staleAnswer)).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.phrase.notesPending)).toBeVisible();
@@ -154,7 +154,7 @@ test("a phrase whose notes answer 204 reads exactly as the screen did before RL-
   await waitForDictionary(page);
 
   const notesResponse = page.waitForResponse((response) => response.url().includes("/api/phrase/notes"));
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(phraseText);
 
   await expect(page.getByText(answerText)).toBeVisible({ timeout: 5000 });
@@ -205,7 +205,7 @@ test("a keystroke mid-phrase raises no request to /api/phrase/notes", async ({ p
   });
 
   await waitForDictionary(page);
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   // One keystroke short of the full phrase, then the completing one before
   // the debounce can fire: the partial text must never be asked about.
@@ -309,7 +309,7 @@ test("typing after a translation raises no notes request until the next translat
   await waitForDictionary(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(PHRASE);
   await pastDebounce(page);
   await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
@@ -339,7 +339,7 @@ test("returning to a phrase already translated and noted raises no request", asy
   await waitForDictionary(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(PHRASE);
   await pastDebounce(page);
   await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
@@ -367,7 +367,7 @@ test("the same phrase with another translation asks again", async ({ page }) => 
   const notes = recordNotes(page);
   await waitForDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(PHRASE);
   await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
   for (let index = 0; index < 21; index++) {
@@ -394,7 +394,7 @@ test("no notes request while the translation is pending", async ({ page }) => {
   await waitForDictionary(page);
   await freezeTimers(page);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill(PHRASE);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(PHRASE);
   await pastDebounce(page);
   await expect.poll(() => translations.texts.length).toBe(1);
   await expect(page.getByText(messages.phrase.translating)).toBeVisible({ timeout: 5000 });
@@ -413,7 +413,7 @@ test("no notes request when the translation fails", async ({ page }) => {
   await waitForDictionary(page);
   await freezeTimers(page);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill(PHRASE);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(PHRASE);
   await pastDebounce(page);
   await expect.poll(() => translations.texts.length).toBe(1);
   await settle(page);
@@ -427,7 +427,7 @@ test("emptying the box after a translation raises no notes request", async ({ pa
   await waitForDictionary(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(PHRASE);
   await pastDebounce(page);
   await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });

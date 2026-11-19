@@ -21,7 +21,7 @@ import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
 import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
-import { Flex, Live, Panels, Text } from "@/components/ui";
+import { Flex, Live, Panels, Text, VisuallyHidden } from "@/components/ui";
 import { InstallStatus } from "./install-status";
 import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
@@ -621,9 +621,14 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
           <>
             <SearchBox value={text} onChange={handleTextChange} rows={suggestionRows} />
             {kind.kind === "empty" && (
-              <Text size="3" muted>
-                {tSearch("brandLine")}
-              </Text>
+              <>
+                <VisuallyHidden>
+                  <h1>{tSearch("label")}</h1>
+                </VisuallyHidden>
+                <Text size="3" muted>
+                  {tSearch("brandLine")}
+                </Text>
+              </>
             )}
             <InstallStatus status={status} onRetry={retry} query={text} />
           </>

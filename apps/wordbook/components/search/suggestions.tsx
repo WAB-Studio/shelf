@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { LOG_DELETED_EVENT } from "@/lib/log/delete";
+import { LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
+import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import { cardFront } from "@/lib/log/card";
 import { readWordStudy } from "@/lib/log/summary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
@@ -38,20 +41,34 @@ export function useSuggestionRows(
       for (const [word, gloss] of pairs) if (gloss !== null) byWord.set(word, gloss);
       setGlosses({ key, byWord });
     });
-    readWordStudy()
-      .then(({ rows }) => {
-        if (live) setSearched(new Set(rows.map((row) => String(cardFront(row)).toLowerCase())));
-      })
-      .catch(() => {});
     return () => {
       live = false;
     };
   }, [key, lookup]);
 
+  // The words the reader has searched: read once, and again whenever the record changes.
+  useEffect(() => {
+    let live = true;
+    function read(): void {
+      readWordStudy()
+        .then(({ rows }) => {
+          if (live) setSearched(new Set(rows.map((row) => String(cardFront(row)).toLowerCase())));
+        })
+        .catch(() => {});
+    }
+    read();
+    const events = [LOG_DELETED_EVENT, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, SYNC_LANDED_EVENT];
+    for (const name of events) window.addEventListener(name, read);
+    return () => {
+      live = false;
+      for (const name of events) window.removeEventListener(name, read);
+    };
+  }, []);
+
   return shown.map((word) => ({
     key: word,
     word,
     gloss: glosses.key === key ? (glosses.byWord.get(word) ?? null) : null,
-    note: word.includes(" ") ? t("phraseNote") : searched.has(word) ? t("searchedBefore") : null,
+    note: word.includes(" ") ? t("phraseNote") : searched.has(word.toLowerCase()) ? t("searchedBefore") : null,
   }));
 }

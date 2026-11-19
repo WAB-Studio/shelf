@@ -41,7 +41,7 @@ test("a one-edit typo offers the headword it was one edit from, with no request"
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("recieve");
 
   // The screen's line and the live region say the same words: a one-edit typo asks no network (RL-86).
@@ -64,7 +64,7 @@ test("tapping the offer opens the corrected word's own entry", async ({ page }) 
   await deleteTranslator(page);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("recieve");
 
   const receiveLink = page.getByRole("link", { name: "receive", exact: false });
@@ -84,7 +84,7 @@ test("a word one edit from several headwords at once offers all of them", async 
   await deleteTranslator(page);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("fettle");
 
   // The screen's line and the live region say the same words: a one-edit typo asks no network (RL-86).
@@ -107,7 +107,7 @@ test("nine candidates all draw, none of them off screen at 360px", async ({ page
   await deleteTranslator(page);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("boz");
 
   await expect(page.getByText(messages.search.correctionTitle)).toBeVisible();
@@ -131,7 +131,7 @@ test("a word with no headword nearby gets the plain miss, not a wrong guess", as
   await deleteTranslator(page);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("zzqqxv");
 
   await expect(page.getByText(messages.search.notFound)).toBeVisible();

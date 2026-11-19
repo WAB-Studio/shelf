@@ -23,7 +23,7 @@ async function open(page: Page, route: string, width: number): Promise<void> {
 }
 
 function box(page: Page) {
-  return page.getByRole("textbox", { name: messages.search.label });
+  return page.getByRole("combobox", { name: messages.search.label });
 }
 
 // Looks each word up and leaves the box empty, so the lookup is written to the record.
@@ -99,6 +99,17 @@ test("a /registro row is one compact line, and the story and the row count the s
   await expect(row).toContainText("time");
   await expect(row.getByRole("cell", { name: "2", exact: true })).toBeVisible();
   expect((await row.boundingBox())!.height).toBeLessThan(60);
+});
+
+test("«Repasar solo esta» in a word's history opens that word alone", async ({ page }) => {
+  await open(page, "/", 1280);
+  await lookUp(page, ["time", "bleak"]);
+  await box(page).fill("time");
+  await page.getByRole("link", { name: messages.story.reviewOnly }).click();
+  await expect(page).toHaveURL(/\/repaso\?palabra=time$/);
+  await expect(page.getByText("1 de 1")).toBeVisible();
+  await expect(page.locator("main")).toContainText("time");
+  await expect(page.locator("main")).not.toContainText("bleak");
 });
 
 test("a word with nothing to review says so and still offers the day's cards", async ({ page }) => {

@@ -120,7 +120,7 @@ test("a navigation the network holds is answered from the cached shell, not wait
   await reached;
 
   // The shell drew while the network request is still open.
-  await expect(page.getByRole("textbox")).toBeVisible();
+  await expect(page.getByRole("combobox")).toBeVisible();
   await Promise.all(open.map((release) => release()));
 });
 
@@ -141,6 +141,6 @@ test("a navigation that stalls is answered from the cached shell before 4 s", as
 
   const started = Date.now();
   await page.goto("/", { timeout: 8_000, waitUntil: "commit" });
-  await expect(page.getByRole("textbox")).toBeVisible({ timeout: 4_000 });
+  await expect(page.getByRole("combobox")).toBeVisible({ timeout: 4_000 });
   expect(Date.now() - started, "the cached shell drew within 4 s").toBeLessThan(4_000);
 });

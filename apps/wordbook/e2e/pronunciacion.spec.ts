@@ -38,7 +38,7 @@ async function blockHeads(page: Page): Promise<string[]> {
 }
 
 async function answer(page: Page, word: string): Promise<void> {
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(word);
   await expect(page.getByRole("heading", { name: word, exact: true })).toBeVisible({ timeout: 5000 });
   await openRareSenses(page);
@@ -232,7 +232,7 @@ test("RL-51: the no-entry breakdown never groups — `row` inside a phrase draws
   });
   await loadDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("row zzqx");
   await expect(page.getByRole("heading", { name: "row", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.search.noEntry.wordMiss)).toBeVisible();

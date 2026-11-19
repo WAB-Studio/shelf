@@ -5,7 +5,7 @@ import styles from "./table.module.css";
 
 // Registro's table: one column of days over a header of column names. A row is a grid of cells;
 // its link covers the whole row from the word's cell, so the menu beside it stays a sibling of
-// the link and never inside it. Below 1024px only the word, its translation and the menu show.
+// the link and never inside it. Below 1024px Estado and Hora are hidden; the word, its translation, Veces and the menu show.
 type Column = "word" | "translation" | "state" | "times" | "time" | "menu";
 
 function TableRoot({ label, children }: { label: string; children?: ReactNode }) {

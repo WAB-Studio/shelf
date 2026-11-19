@@ -59,7 +59,7 @@ async function deleteTranslator(page: Page): Promise<void> {
 // race this write. Own rows take ids 1 and 3; the pulled one takes 2.
 async function seed(page: Page): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   const lookups = [
     row("alpha"), // id 1, this device's own
     row("zebra", { device: FOREIGN, deviceSeq: 7 }), // id 2, pulled

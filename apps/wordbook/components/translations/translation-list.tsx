@@ -30,8 +30,7 @@ export function TranslationList({
     ? [...new Set(rawItems.map((item) => item.replace(/\s*(\.{3}|…)$/, "").trim()).filter((item) => item !== ""))]
     : rawItems;
   const [open, setOpen] = useState(false);
-  // One translation behind «ver 1 más» is no saving: the entry's line folds from two.
-  const limit = lead && items.length > LEAD_SHOWN + 1 ? LEAD_SHOWN : lead ? items.length : undefined;
+  const limit = lead ? LEAD_SHOWN : undefined;
   const { shown, hidden } = previewTranslations(items, limit);
   const line = open ? items : shown;
   const [first, ...rest] = line;

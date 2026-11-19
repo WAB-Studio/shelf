@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
+import { LOG_DELETED_EVENT } from "@/lib/log/delete";
+import { LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
+import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import { contentUnit } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { buildQueue, isReviewable } from "@/lib/review/deck";
@@ -21,16 +24,26 @@ export function ReviewRow() {
 
   useEffect(() => {
     let live = true;
-    Promise.all([readWordStudy(), readCards()])
-      .then(([{ rows }, cards]) => {
-        if (!live) return;
-        const reviewable = rows.filter(isReviewable);
-        if (reviewable.length === 0) return;
-        setDue({ due: buildQueue(rows, cards, Date.now()).items.length, unit: contentUnit(reviewable) });
-      })
-      .catch(() => {});
+    function read(): void {
+      Promise.all([readWordStudy(), readCards()])
+        .then(([{ rows }, cards]) => {
+          if (!live) return;
+          const reviewable = rows.filter(isReviewable);
+          if (reviewable.length === 0) {
+            setDue(null);
+            return;
+          }
+          setDue({ due: buildQueue(rows, cards, Date.now()).items.length, unit: contentUnit(reviewable) });
+        })
+        .catch(() => {});
+    }
+    read();
+    // The margin stays mounted while the reader searches, deletes or syncs: the count follows the record.
+    const events = [LOG_DELETED_EVENT, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, SYNC_LANDED_EVENT];
+    for (const name of events) window.addEventListener(name, read);
     return () => {
       live = false;
+      for (const name of events) window.removeEventListener(name, read);
     };
   }, []);
 

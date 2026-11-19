@@ -161,10 +161,14 @@ export function DownloadMenu() {
           {ankiCounts.kind === "ready" && ankiCounts.cards === 0 && ankiCounts.pending === 0 && (
             <Menu.Note>{t("study.ankiNone", { words: ankiCounts.words })}</Menu.Note>
           )}
-          <Menu.Separator />
-          <Menu.Item onSelect={() => window.dispatchEvent(new Event(CLEAR_ASKED_EVENT))}>
-            {t("clear.trigger")}
-          </Menu.Item>
+          {countState.kind === "ready" && countState.count > 0 && (
+            <>
+              <Menu.Separator />
+              <Menu.Item onSelect={() => window.dispatchEvent(new Event(CLEAR_ASKED_EVENT))}>
+                {t("clear.trigger")}
+              </Menu.Item>
+            </>
+          )}
         </Menu.Content>
       </Menu.Root>
 

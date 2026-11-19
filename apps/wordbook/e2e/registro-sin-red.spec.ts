@@ -156,7 +156,7 @@ for (const viewport of [
     async function recordThree(page: Page): Promise<void> {
       await page.goto("/");
       await controlled(page);
-      const box = page.getByRole("textbox", { name: messages.search.label });
+      const box = page.getByRole("combobox", { name: messages.search.label });
       await expect(page.getByText(messages.install.unknownSize)).toHaveCount(0);
       await expect(page.getByText(messages.install.failed)).toHaveCount(0);
       for (const word of WORDS) {

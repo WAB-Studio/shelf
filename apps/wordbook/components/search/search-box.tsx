@@ -73,6 +73,8 @@ export function SearchBox({
         onKeyDown={handleKeyDown}
         placeholder={t("placeholder")}
         aria-label={t("label")}
+        role="combobox"
+        aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-activedescendant={open ? suggestOptionId(listId, active) : undefined}
         aria-autocomplete="list"

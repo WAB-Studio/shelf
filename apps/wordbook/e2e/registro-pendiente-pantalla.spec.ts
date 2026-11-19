@@ -71,7 +71,7 @@ async function keepNetworkSilent(page: Page): Promise<void> {
 
 async function seed(page: Page, rows: Seed[]): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, lookups }) =>
       new Promise<void>((resolve, reject) => {

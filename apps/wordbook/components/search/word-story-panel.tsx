@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import NextLink from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
@@ -10,7 +11,7 @@ import { readWordStory, type WordStory } from "@/lib/log/story";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import { dueWhen } from "@/lib/review/schedule";
 import { readCards } from "@/lib/review/store";
-import { Flex, MarkedWord, MetaLabel, Separator, Text } from "@/components/ui";
+import { Flex, Link, MarkedWord, MetaLabel, Separator, TapTarget, Text } from "@/components/ui";
 
 type Review = { kind: "new" } | { kind: "due" } | { kind: "later"; due: number; when: "today" | "tomorrow" | "later" };
 
@@ -79,6 +80,13 @@ export function WordStoryPanel({ headword }: { headword: string }) {
                   date: format.dateTime(review.due, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(review.due, openedAt, timeZone) }),
                 })}
         </Text>
+        <Link asChild>
+          <NextLink href={`/repaso?palabra=${encodeURIComponent(headword)}`} prefetch={false}>
+            <TapTarget align="center">
+              <Text size="2" weight="bold">{t("reviewOnly")}</Text>
+            </TapTarget>
+          </NextLink>
+        </Link>
       </Flex>
       <Separator size="4" />
       <Flex direction="column" gap="2">

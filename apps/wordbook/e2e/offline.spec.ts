@@ -66,7 +66,7 @@ test("the app opens with no connection, from its own cache, never the browser's"
   await context.setOffline(true);
   await page.reload();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await expect(searchBox).toBeVisible();
 
   // RL-16: the box, not a network error page — Chromium's own offline page
@@ -129,7 +129,7 @@ test("a hard load of /registro/zzqqxv does not overwrite the cached / shell", as
   // Offline "/": the search box, not the word page the last hard load left
   // in the browser's history.
   await page.goto("/");
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await expect(searchBox).toBeVisible();
   await expect(searchBox).toBeEditable();
 
@@ -239,7 +239,7 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
 
     // A row this device recorded itself, so `ClearPanel`'s own count gate
     // has something to show once the confirm panel opens.
-    const searchBox = page.getByRole("textbox", { name: messages.search.label });
+    const searchBox = page.getByRole("combobox", { name: messages.search.label });
     await searchBox.fill("apple");
     // The row is recorded once the answer paints; clearing first records nothing.
     await expect(page.getByRole("heading", { name: "apple", exact: true })).toBeVisible();
@@ -362,7 +362,7 @@ for (const [first, second] of [
     await page.waitForLoadState("load");
     expect(unanswered).toEqual([]);
 
-    const searchBox = page.getByRole("textbox", { name: messages.search.label });
+    const searchBox = page.getByRole("combobox", { name: messages.search.label });
     await expect(searchBox).toBeVisible();
     await expect(searchBox).toBeEditable();
     // The box can render from the server HTML alone; typing proves the
@@ -539,7 +539,7 @@ async function staysTrue(check: () => Promise<boolean>, windowMs = 1500): Promis
 }
 
 async function expectBox(page: Page): Promise<void> {
-  const box = page.getByRole("textbox", { name: messages.search.label });
+  const box = page.getByRole("combobox", { name: messages.search.label });
   await expect(box).toBeVisible();
   await expect(box).toBeEditable();
 }

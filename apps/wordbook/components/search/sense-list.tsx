@@ -34,8 +34,6 @@ import { NetworkAnswer, type NetworkAnswerState } from "./network-answer";
 const LearnableContext = createContext<{
   senses: readonly Sense[];
   chosen: Sense | null;
-  // True once the reader has tapped: a one-sense word is «learning» only then, a several-sense word always has its default.
-  kept: boolean;
   choose: (sense: Sense) => void;
 } | null>(null);
 
@@ -73,7 +71,7 @@ function LearnableSenses({
   };
 
   return (
-    <LearnableContext.Provider value={{ senses, chosen: pickSense(senses, choice, ranked), kept: choice !== null, choose }}>
+    <LearnableContext.Provider value={{ senses, chosen: pickSense(senses, choice, ranked), choose }}>
       {children}
     </LearnableContext.Provider>
   );
@@ -503,7 +501,7 @@ function EntrySenses({
 function LearnButton({ sense, t }: { sense: Sense; t: ReturnType<typeof useTranslations> }) {
   const learnable = useContext(LearnableContext);
   if (learnable === null) return undefined;
-  const learning = learnable.chosen === sense && (learnable.senses.length > 1 || learnable.kept);
+  const learning = learnable.chosen === sense;
   // The sense already learnt has nothing left to press: it stays a button that reads its state.
   return learning ? (
     <Button type="button" variant="soft" size="3" aria-pressed="true" aria-disabled="true">

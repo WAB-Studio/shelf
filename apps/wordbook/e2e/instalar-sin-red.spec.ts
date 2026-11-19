@@ -72,7 +72,7 @@ test("an install cut by the network going off says so, keeps nothing, and the re
   expect(ranges, "two requests, neither a partial one: no resume from a byte offset").toEqual([undefined, undefined]);
   expect(await manifestRow(page)).toBeDefined();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10_000 });
 });
