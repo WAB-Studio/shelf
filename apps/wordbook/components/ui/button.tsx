@@ -19,6 +19,8 @@ type BlockProp = {
   block?: boolean;
   // Thickens an outline variant's rule to 1.5px; `Pedirlo` under «Copia» asks.
   heavy?: boolean;
+  // 64px tall with a rounder corner: the review's grades, each carrying two lines.
+  tall?: boolean;
 };
 
 function withTap(className: string | undefined): string {
@@ -30,14 +32,19 @@ function withHeavy(heavy: boolean | undefined, className: string | undefined): s
   return className ? `${styles.heavy} ${className}` : styles.heavy;
 }
 
+function withTall(tall: boolean | undefined, className: string | undefined): string | undefined {
+  if (!tall) return className;
+  return className ? `${styles.tall} ${className}` : styles.tall;
+}
+
 function withBlock(block: boolean | undefined, className: string | undefined): string | undefined {
   if (!block) return className;
   return className ? `${styles.block} ${className}` : styles.block;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps & BlockProp>(
-  function Button({ block, heavy, className, ...props }, ref) {
-    return <ThemesButton ref={ref} {...props} className={withHeavy(heavy, withBlock(block, withTap(className)))} />;
+  function Button({ block, heavy, tall, className, ...props }, ref) {
+    return <ThemesButton ref={ref} {...props} className={withTall(tall, withHeavy(heavy, withBlock(block, withTap(className))))} />;
   },
 );
 

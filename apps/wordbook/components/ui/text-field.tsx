@@ -10,10 +10,15 @@ import styles from "./text-field.module.css";
 // field a reader must find; the rest keep the hairline. `label` draws the
 // field's name above it, always visible, and names the input for a screen
 // reader too.
-type RootProps = ComponentPropsWithoutRef<typeof ThemesTextField.Root> & { edge?: boolean; label?: string };
+type RootProps = ComponentPropsWithoutRef<typeof ThemesTextField.Root> & {
+  edge?: boolean;
+  label?: string;
+  // Keeps the label for a screen reader and draws none: the field's placeholder and place say it.
+  hideLabel?: boolean;
+};
 
 const Root = forwardRef<ComponentRef<typeof ThemesTextField.Root>, RootProps>(function Root(
-  { className, edge, label, id, ...props },
+  { className, edge, label, hideLabel, id, ...props },
   ref,
 ) {
   const generated = useId();
@@ -23,7 +28,7 @@ const Root = forwardRef<ComponentRef<typeof ThemesTextField.Root>, RootProps>(fu
   if (label === undefined) return field;
   return (
     <div className={styles.field}>
-      <label htmlFor={inputId} className={styles.label} data-field-label="">
+      <label htmlFor={inputId} className={hideLabel ? `${styles.label} ${styles.hidden}` : styles.label} data-field-label="">
         {label}
       </label>
       {field}

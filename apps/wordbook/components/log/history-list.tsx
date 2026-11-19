@@ -1,31 +1,32 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import NextLink from "next/link";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { X } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { readWordStudy, type StudyRow } from "@/lib/log/summary";
-import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, readSyncState } from "@/lib/log/record";
+import { LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, readSyncState } from "@/lib/log/record";
 import { deleteStudyGroup, LOG_DELETED_EVENT } from "@/lib/log/delete";
-import { countKind } from "@/lib/log/outcome";
+import { countKind, isPhraseRow } from "@/lib/log/outcome";
 import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
 import { groupByDay, newestRows } from "@/lib/log/diary";
 import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
 import { splitTranslations } from "@/lib/log/translation-line";
+import { readCards } from "@/lib/review/store";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import {
+  Box,
   Button,
-  Card,
-  Figure,
   Flex,
-  Grid,
   IconButton,
   Link,
+  Menu,
   MetaLabel,
+  Segments,
   Separator,
   Skeleton,
+  Table,
   TapTarget,
   Text,
   TextField,
@@ -38,10 +39,11 @@ import {
 type ListState =
   | { kind: "loading" }
   | { kind: "empty" }
-  | { kind: "ready"; rows: StudyRow[]; totalLookups: number; totalWords: number }
+  // `learning`: the keys the review holds a card for, read in the same round as the rows.
+  | { kind: "ready"; rows: StudyRow[]; learning: ReadonlySet<string>; totalWords: number }
   | { kind: "failed" };
 
-// The one row whose ✕ was pressed: a second row's ✕ replaces it, so two
+// The one row whose «Quitar del registro» was chosen: a second row's replaces it, so two
 // questions are never open at once (`RegistroBorrarFilaConfirmar`).
 // `local`: the copy is off, so the delete reaches this device alone (RNL-11).
 // `note`: signed out with its reader kept, so the account deletes on return.
@@ -53,18 +55,54 @@ type RowActions = {
   remove: (key: string) => void;
 };
 
+type Segment = "all" | "learning" | "phrases";
+
 // The rows drawn at first and per «Ver más»: 400 rows at once is a 37,000px page.
 const PAGE_ROWS = 50;
 
+// A Radix menu costs a render for every row drawn, fifty at a time and again on each keystroke of the
+// filter; a row gets its menu when its button is first pressed, and that press opens it.
+function RowMenu({ word, onRemove }: { word: string; onRemove: () => void }) {
+  const t = useTranslations("log");
+  const [armed, setArmed] = useState(false);
+  const button = (
+    <IconButton
+      type="button"
+      size="2"
+      variant="ghost"
+      color="gray"
+      quiet
+      aria-label={t("study.rowMenu", { word })}
+      aria-haspopup="menu"
+      onClick={armed ? undefined : () => setArmed(true)}
+    >
+      <MoreHorizontal size={18} />
+    </IconButton>
+  );
+  if (!armed) return button;
+  return (
+    <Menu.Root defaultOpen>
+      <Menu.Trigger>{button}</Menu.Trigger>
+      <Menu.Content align="end">
+        <Menu.Item onSelect={onRemove}>{t("study.removeRow")}</Menu.Item>
+      </Menu.Content>
+    </Menu.Root>
+  );
+}
+
 const StudyRowItem = memo(function StudyRowItem({
   row,
+  learning,
+  time,
   phase,
   local,
   note,
   actions,
 }: {
   row: StudyRow;
-  // Undefined on every row but the target, so pressing one ✕ re-renders one row.
+  learning: boolean;
+  time: string;
+  // Undefined on every row but the target, so choosing one row's menu item re-renders one row.
   phase: DeleteTarget["phase"] | undefined;
   local: boolean;
   note: boolean;
@@ -89,132 +127,130 @@ const StudyRowItem = memo(function StudyRowItem({
       : row.lastOutcome === "unlisted"
         ? t("study.noResult")
         : null;
-  // A row with nothing under its line is the line alone, 44px; one that says more pads itself.
-  const extended = waiting || formsLine !== null || phase !== undefined;
+  const hasExtra = waiting || formsLine !== null || phase !== undefined;
   return (
-    // The row is a card of one line: the word, its main translation and its count are the link; the ✕ sits
-    // in a track of its own beside it, so a tap on it can never navigate (`RegistroBorrarFila`).
-    <Card padding="none">
-      <Grid columns="minmax(0, 1fr) 44px" gapY="1" align="center" px="3" py={extended ? "2" : "0"}>
-        <Link asChild underline="none" ink>
-          <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
-            <TapTarget width="100%" align="center" gap="3">
-              {/* `Text truncate` needs a flex container of its own to clip (docs/wordbook/DESIGN.md
-                  "What the data forces"). */}
-              <Flex minWidth="0" maxWidth={inline === null ? undefined : "60%"} overflow="hidden">
-                <Text size="5" weight="bold" serif truncate english>
-                  {word}
-                </Text>
-              </Flex>
-              <Flex minWidth="0" flexGrow="1" overflow="hidden">
-                {inline !== null && (
-                  <Text variant="translation" muted truncate>
-                    {inline}
-                  </Text>
-                )}
-              </Flex>
-              <MetaLabel nowrap aria-label={t("study.rowCountLabel", { count: row.count })}>
-                {t("study.rowCount", { count: row.count })}
-              </MetaLabel>
-            </TapTarget>
-          </NextLink>
-        </Link>
-      {phase === undefined && (
-        // A ghost's negative margins stretch it past a grid track it fills;
-        // centred in a cell of its own it keeps to 44px, clear of the link.
-        <Flex justify="center">
-          <IconButton
-            type="button"
-            size="2"
-            variant="ghost"
-            color="gray"
-            quiet
-            aria-label={t("study.deleteRow", { word })}
-            onClick={() => actions.ask(row.key)}
-          >
-            <X size={16} />
-          </IconButton>
-        </Flex>
-      )}
-
-      {(waiting || formsLine !== null) && (
-        <Flex gridColumn="1 / -1" direction="column" gap="1" minWidth="0">
-          {waiting ? (
-            <>
-              <Text size="2" muted="quietest">
-                {t("study.pendingWaiting")}
-              </Text>
+    <Table.Row
+      extra={
+        hasExtra && (
+          <Flex direction="column" gap="3" align="start" pb="3" px={{ initial: "0", lg: "4" }}>
+            {waiting && (
               <Text size="2" muted="quietest">
                 {t(row.lastOutcome === "untranslated" ? "study.pendingPhrase" : "study.pendingWord")}
               </Text>
-            </>
-          ) : (
-            <Text size="2" muted truncate>
-              {formsLine}
-            </Text>
-          )}
-        </Flex>
-      )}
-
-      {(phase === "asking" || phase === "deleting") && (
-        // The order and weights of `RegistroVaciarConfirmar`: the accent on
-        // the safe exit, the destructive one a grey link after it.
-        <Flex gridColumn="1 / -1" direction="column" gap="3" align="start">
-          <Flex direction="column" gap="1">
-            <Text variant="breakTitle">{t("study.deleteConfirmTitle", { word })}</Text>
-            <Text variant="breakBody" muted>
-              {t(local ? "study.deleteConfirmBodyLocal" : "study.deleteConfirmBody", { count: row.count })}
-            </Text>
-            {note && (
-              <Text variant="breakBody" muted>
-                {t("study.deleteConfirmLocalNote")}
+            )}
+            {!waiting && formsLine !== null && (
+              <Text size="2" muted truncate>
+                {formsLine}
               </Text>
             )}
-          </Flex>
-          <Flex gap="4" align="center" wrap="wrap">
-            <Button size="3" disabled={deleting} onClick={actions.keep}>
-              {t("study.deleteKeep")}
-            </Button>
-            <Link asChild underline="always" muted>
-              <button type="button" disabled={deleting} onClick={() => actions.remove(row.key)}>
-                <TapTarget align="center" px="1">
-                  {deleting ? t("study.deleting") : t("study.deleteConfirm")}
-                </TapTarget>
-              </button>
-            </Link>
-          </Flex>
-        </Flex>
-      )}
 
-      {phase === "failed" && (
-        // `## Failure`: a hairline, the line in full ink, the accent on the
-        // retry. The transaction aborted whole, so the row above is intact.
-        <Flex gridColumn="1 / -1" direction="column" gap="3" align="start">
-          <Separator size="4" />
-          <Flex direction="column" gap="1">
-            <Text variant="breakTitle" role="alert">
-              {t("study.deleteFailedTitle", { word })}
-            </Text>
-            <Text variant="breakBody" muted>
-              {t("study.deleteFailedBody", { count: row.count })}
-            </Text>
+            {(phase === "asking" || phase === "deleting") && (
+              // The order and weights of `RegistroVaciarConfirmar`: the accent on
+              // the safe exit, the destructive one a grey link after it.
+              <>
+                <Flex direction="column" gap="1">
+                  <Text variant="breakTitle">{t("study.deleteConfirmTitle", { word })}</Text>
+                  <Text variant="breakBody" muted>
+                    {t(local ? "study.deleteConfirmBodyLocal" : "study.deleteConfirmBody", { count: row.count })}
+                  </Text>
+                  {note && (
+                    <Text variant="breakBody" muted>
+                      {t("study.deleteConfirmLocalNote")}
+                    </Text>
+                  )}
+                </Flex>
+                <Flex gap="4" align="center" wrap="wrap">
+                  <Button size="3" disabled={deleting} onClick={actions.keep}>
+                    {t("study.deleteKeep")}
+                  </Button>
+                  <Link asChild underline="always" muted>
+                    <button type="button" disabled={deleting} onClick={() => actions.remove(row.key)}>
+                      <TapTarget align="center" px="1">
+                        {deleting ? t("study.deleting") : t("study.deleteConfirm")}
+                      </TapTarget>
+                    </button>
+                  </Link>
+                </Flex>
+              </>
+            )}
+
+            {phase === "failed" && (
+              // `## Failure`: a hairline, the line in full ink, the accent on the
+              // retry. The transaction aborted whole, so the row above is intact.
+              <>
+                <Separator size="4" />
+                <Flex direction="column" gap="1">
+                  <Text variant="breakTitle" role="alert">
+                    {t("study.deleteFailedTitle", { word })}
+                  </Text>
+                  <Text variant="breakBody" muted>
+                    {t("study.deleteFailedBody", { count: row.count })}
+                  </Text>
+                </Flex>
+                <Flex gap="4" align="center" wrap="wrap">
+                  <Button size="3" onClick={() => actions.remove(row.key)}>
+                    {t("retry")}
+                  </Button>
+                  <Link asChild underline="always" muted>
+                    <button type="button" onClick={actions.keep}>
+                      <TapTarget align="center" px="1">
+                        {t("study.deleteKeep")}
+                      </TapTarget>
+                    </button>
+                  </Link>
+                </Flex>
+              </>
+            )}
           </Flex>
-          <Flex gap="4" align="center" wrap="wrap">
-            <Button size="3" onClick={() => actions.remove(row.key)}>
-              {t("retry")}
-            </Button>
-            <Link asChild underline="always" muted>
-              <button type="button" onClick={actions.keep}>
-                <TapTarget align="center" px="1">
-                  {t("study.deleteKeep")}
-                </TapTarget>
-              </button>
-            </Link>
-          </Flex>
-        </Flex>
-      )}
-      </Grid>
-    </Card>
+        )
+      }
+    >
+      <Table.Cell column="word">
+        <Table.Cover href={`/registro/${encodeURIComponent(row.key)}`}>
+          {/* `Text truncate` needs a block of its own to clip (docs/wordbook/DESIGN.md "What the data forces"). */}
+          <Text as="div" size="5" weight="bold" serif truncate english>
+            {word}
+          </Text>
+        </Table.Cover>
+      </Table.Cell>
+      <Table.Cell column="translation">
+        {waiting ? (
+          <Text as="div" size="3" muted="quietest" truncate>
+            {t("study.pendingWaiting")}
+          </Text>
+        ) : (
+          inline !== null && (
+            <Text as="div" size="5" serif muted="secondary" truncate>
+              {inline}
+            </Text>
+          )
+        )}
+      </Table.Cell>
+      <Table.Cell column="state">
+        {learning ? (
+          <Text size="2" accent>
+            {t("study.stateLearning")}
+          </Text>
+        ) : (
+          <Text size="2" muted="quietest">
+            {t("study.stateNone")}
+          </Text>
+        )}
+      </Table.Cell>
+      <Table.Cell column="times">
+        <Text size="2" muted>
+          {row.count}
+        </Text>
+      </Table.Cell>
+      <Table.Cell column="time">
+        <Text size="2" muted>
+          {time}
+        </Text>
+      </Table.Cell>
+      <Table.Cell column="menu">
+        {phase === undefined && <RowMenu word={word} onRemove={() => actions.ask(row.key)} />}
+      </Table.Cell>
+    </Table.Row>
   );
 });
 
@@ -278,8 +314,9 @@ export function HistoryList() {
     function read(): void {
       const requestId = ++requestIdRef.current;
       reading = true;
-      Promise.all([readWordStudy(), countRecords()])
-        .then(([study, totalLookups]) => {
+      // The review's cards ride the same round: a store that fails to open leaves every state «—», never the list.
+      Promise.all([readWordStudy(), readCards().catch(() => [])])
+        .then(([study, cards]) => {
           if (cancelled || requestIdRef.current !== requestId) return;
           // A deleted row keeps «Borrando…» until this reread drops it, so its
           // ✕ never flashes back for the frame in between.
@@ -289,7 +326,7 @@ export function HistoryList() {
           setState(
             study.rows.length === 0
               ? { kind: "empty" }
-              : { kind: "ready", rows: study.rows, totalLookups, totalWords: study.total },
+              : { kind: "ready", rows: study.rows, learning: new Set(cards.map((card) => card.key)), totalWords: study.total },
           );
         })
         .catch(() => {
@@ -339,11 +376,27 @@ export function HistoryList() {
     };
   }, [attempt]);
 
+  const [segment, setSegment] = useState<Segment>("all");
   const readyRows = state.kind === "ready" ? state.rows : null;
-  const visible = useMemo(
-    () => (readyRows === null ? [] : filterStudyRows(readyRows, query)),
-    [readyRows, query],
+  const learningKeys = state.kind === "ready" ? state.learning : null;
+  const counts = useMemo(
+    () => ({
+      all: readyRows?.length ?? 0,
+      learning: readyRows?.filter((row) => learningKeys?.has(row.key)).length ?? 0,
+      phrases: readyRows?.filter(isPhraseRow).length ?? 0,
+    }),
+    [readyRows, learningKeys],
   );
+  const visible = useMemo(() => {
+    if (readyRows === null) return [];
+    const inSegment =
+      segment === "learning"
+        ? readyRows.filter((row) => learningKeys?.has(row.key))
+        : segment === "phrases"
+          ? readyRows.filter(isPhraseRow)
+          : readyRows;
+    return filterStudyRows(inSegment, query);
+  }, [readyRows, learningKeys, segment, query]);
 
   const format = useFormatter();
   // The day «today» means is the one the screen opened on.
@@ -452,35 +505,53 @@ export function HistoryList() {
   return (
     <Flex direction="column" gap="5">
       <Flex direction="column" gap="3">
-        <TextField.Root
-          ref={filterField}
-          size="3"
-          value={query}
-          onChange={(event) => change(event.target.value)}
-          label={t("study.filterLabel")}
-          placeholder={t("study.filterPlaceholder")}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-        >
-          {query.length > 0 && (
-            <TextField.Slot side="right">
-              <IconButton
-                type="button"
-                size="2"
-                variant="ghost"
-                color="gray"
-                aria-label={t("study.filterClear")}
-                onClick={() => {
-                  change("");
-                  filterField.current?.focus();
-                }}
-              >
-                <X size={16} />
-              </IconButton>
-            </TextField.Slot>
-          )}
-        </TextField.Root>
+        <Flex align="center" gap="4" wrap="wrap">
+          <Box width="420px" maxWidth="100%">
+            <TextField.Root
+              ref={filterField}
+              size="3"
+              value={query}
+              onChange={(event) => change(event.target.value)}
+              label={t("study.filterLabel")}
+              hideLabel
+              placeholder={t("study.filterPlaceholder")}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            >
+              {query.length > 0 && (
+                <TextField.Slot side="right">
+                  <IconButton
+                    type="button"
+                    size="2"
+                    variant="ghost"
+                    color="gray"
+                    aria-label={t("study.filterClear")}
+                    onClick={() => {
+                      change("");
+                      filterField.current?.focus();
+                    }}
+                  >
+                    <X size={16} />
+                  </IconButton>
+                </TextField.Slot>
+              )}
+            </TextField.Root>
+          </Box>
+          <Segments
+            label={t("study.filterGroup")}
+            value={segment}
+            onValueChange={(next) => {
+              setSegment(next);
+              setShownRows(PAGE_ROWS);
+            }}
+            options={[
+              { value: "all", label: t("study.filterAll", { count: counts.all }) },
+              { value: "learning", label: t("study.filterLearning", { count: counts.learning }) },
+              { value: "phrases", label: t("study.filterPhrases", { count: counts.phrases }) },
+            ]}
+          />
+        </Flex>
         {filtering && visible.length > 0 && (
           <Text size="2" muted>
             {t("study.filterCount", { shown: visible.length, total: state.totalWords, kind })}
@@ -488,44 +559,51 @@ export function HistoryList() {
         )}
       </Flex>
 
-      <Flex gap="6" wrap="wrap">
-        <Figure value={state.totalLookups} label={t("study.figureLookups", { count: state.totalLookups })} />
-        <Figure value={state.totalWords} label={t("study.figureWords", { count: state.totalWords, kind })} />
-      </Flex>
-
       {visible.length === 0 ? (
         <Text size="2" muted>
-          {t("study.filterNone", { query: query.trim(), kind })}
+          {filtering ? t("study.filterNone", { query: query.trim(), kind }) : t("study.segmentNone")}
         </Text>
       ) : (
         <Flex direction="column" gap="4">
-          {/* A diary: the days newest first, each with its rows in compact cards. */}
-          {days.map((day) => (
-            <Flex key={`${day.when}-${day.at}`} direction="column" gap="3">
-              <MetaLabel>
-                {day.when === "today"
-                  ? t("study.dayToday", { count: day.rows.length })
-                  : day.when === "yesterday"
-                    ? t("study.dayYesterday", { count: day.rows.length })
-                    : t("study.dayOther", {
-                        count: day.rows.length,
-                        date: format.dateTime(day.at, { weekday: "long", day: "numeric", month: "short", timeZone, ...yearWhenDifferent(day.at, openedAt, timeZone) }),
-                      })}
-              </MetaLabel>
-              <Grid columns={{ initial: "1", lg: "2", xl: "3" }} gap="3" align="start">
+          {/* A diary: the days newest first, each with its rows under the column names. */}
+          <Table.Root label={t("study.tableLabel")}>
+            <Table.Head>
+              <Table.Heading column="word">{t("study.columnWord")}</Table.Heading>
+              <Table.Heading column="translation">{t("study.columnTranslation")}</Table.Heading>
+              <Table.Heading column="state">{t("study.columnState")}</Table.Heading>
+              <Table.Heading column="times">{t("study.columnTimes")}</Table.Heading>
+              <Table.Heading column="time">{t("study.columnTime")}</Table.Heading>
+              <Table.Heading column="menu" />
+            </Table.Head>
+            {days.map((day) => (
+              <Fragment key={`${day.when}-${day.at}`}>
+                <Table.Day>
+                  <MetaLabel>
+                    {day.when === "today"
+                      ? t("study.dayToday", { count: day.rows.length })
+                      : day.when === "yesterday"
+                        ? t("study.dayYesterday", { count: day.rows.length })
+                        : t("study.dayOther", {
+                            count: day.rows.length,
+                            date: format.dateTime(day.at, { weekday: "long", day: "numeric", month: "short", timeZone, ...yearWhenDifferent(day.at, openedAt, timeZone) }),
+                          })}
+                  </MetaLabel>
+                </Table.Day>
                 {day.rows.map((row) => (
                   <StudyRowItem
                     key={row.key}
                     row={row}
+                    learning={state.learning.has(row.key)}
+                    time={format.dateTime(row.lastAt, { hour: "2-digit", minute: "2-digit", timeZone })}
                     phase={target?.key === row.key ? target.phase : undefined}
                     local={target?.key === row.key && target.local}
                     note={target?.key === row.key && target.note}
                     actions={actions}
                   />
                 ))}
-              </Grid>
-            </Flex>
-          ))}
+              </Fragment>
+            ))}
+          </Table.Root>
           {visible.length > shownRows && (
             <Flex justify="center">
               <Button size="3" variant="soft" onClick={() => setShownRows(shownRows + PAGE_ROWS)}>

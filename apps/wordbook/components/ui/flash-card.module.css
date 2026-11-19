@@ -82,3 +82,17 @@
     margin-inline: auto;
   }
 }
+
+@media (min-width: 1024px) {
+  .card.centred {
+    max-width: none;
+    aspect-ratio: auto;
+    border-radius: 22px;
+  }
+
+  .centred .face {
+    min-height: 360px;
+    padding: 56px 48px;
+    gap: 12px;
+  }
+}

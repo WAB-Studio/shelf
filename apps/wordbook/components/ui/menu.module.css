@@ -1,0 +1,15 @@
+/* The 44px floor under a thumb; a pointer keeps Radix's denser step. Doubled to outrank
+   `.rt-DropdownMenuItem:where(.rt-r-size-N)`. */
+@media (pointer: coarse) {
+  .item.item {
+    min-height: 44px;
+  }
+}
+
+.note.note {
+  max-width: 280px;
+  height: auto;
+  white-space: normal;
+  color: var(--rl-muted);
+  line-height: 1.45;
+}

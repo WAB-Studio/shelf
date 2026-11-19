@@ -2009,3 +2009,42 @@ Taken by the user: the review travels with the account (RL-93), replacing «no v
 - **The confirmation before «Vaciar el registro» carries one more line under its body** (RL-94): with an account, that the account keeps the review if the
   reader empties only this device and loses it if the account is emptied too; with none, that the review lives only here and goes with the record.
 - **No board was drawn.** Both are lines of copy in screens already approved.
+
+## Registro y Repaso en escritorio (2026-11-19)
+
+Taken from the boards `C-frio-Registro` and `C-frio-Repaso`, picked by the user. From 1024 px; the phone keeps its single column.
+Every colour is a token (`--rl-*`); the palette of the same day changes the hexes, never these rules.
+
+### Registro: one table, by day
+
+- **The header row.** The title (Fraunces 40/700) at the left; at the right «Descargar ▾» and the primary «Repasar N» (N = what is due today;
+  hidden when nothing is due). «Descargar ▾» is a menu: «Descargar el registro», «Descargar para Anki», a hairline, «Vaciar el registro».
+  The wipe keeps its confirmation, which opens under the header. When the record is empty the menu is not drawn. The Anki item is not
+  drawn when no card can be made; a line in the menu says why (RL-72). What a download reports sits under the button.
+- **The second row.** The filter field, a 420 px pill whose label is read by a screen reader and not drawn, then «Todas · N»,
+  «Aprendiendo · N», «Frases · N». The three read the record already in memory: a word is «Aprendiendo» when the review holds a card
+  for it, a phrase is one the reader translated.
+- **The table.** One column, at most 1100 px, under the filter. A header row of 11 px / 600 / uppercase labels: Palabra, Traducción, Estado,
+  Veces, Hora. Days are rows of the same table: «Hoy · 3», «Ayer · 4», then weekday and date. A row is 52 px with a hairline above:
+  headword (Fraunces 18/700, truncates), translation (Fraunces 18, secondary ink, truncates), state («Aprendiendo» in the accent, or «—»),
+  searches (tabular, right), the time of the last search (tabular, right) and a «⋯» menu holding «Quitar del registro».
+  Columns: 300 px · 1fr · 140 px · 80 px · 90 px · 44 px, 16 px apart.
+- **The row opens the word** through the link on its headword, stretched over the line; the menu stays beside it, never inside it.
+- **What the row no longer carries.** The «1 VEZ» chip, the per-row ✕, and the two figures over the list («9 búsquedas», «9 palabras»);
+  the count of searches is the Veces column, the count of words is «Todas · N». The «Descargas» card is gone.
+- **A row that waits for its answer** (RL-76) says «Sin respuesta todavía» in the translation cell and its explanation under the line.
+  A row of several forms lists them under the line. A question (delete) opens under the line, full width.
+- **On a phone** the table is a list: headword over its translation, the menu at the right; Estado, Veces and Hora are not drawn and the
+  header row is not either.
+
+### Repaso: one centred column
+
+- A 680 px column centred in what the sidebar leaves (not in the viewport). Header line: «Repaso» (Fraunces 32), the progress bar,
+  «3 de 9», a quiet «Salir» to the record.
+- The card: raised, a hairline, radius 22, everything centred, 56 / 48 px of air, at least 360 px tall. From the top: the kind note
+  («Palabra nueva», 13 px, quietest), the headword, after the reveal a short rule, the part of speech in the accent, the translation, the
+  definition in secondary ink.
+- The four grades in one row of equal width, 64 px tall, radius 16: the name, and under it «key · interval». The suggested one («Bien») is
+  filled with the accent. Under them, the hint «Teclado: Espacio muestra la respuesta · 1 a 4 califica». On a phone the grades stay in the
+  bar above the bottom nav, without the key.
+- The review logic is unchanged: ts-fsrs, the keys 1 to 4, the focus that follows the reader.

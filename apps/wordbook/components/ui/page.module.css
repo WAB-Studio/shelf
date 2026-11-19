@@ -70,3 +70,15 @@
     max-width: none;
   }
 }
+
+/* The review's column: 680px of content centred in what the sidebar leaves, whatever the width. The
+   padding sits inside the cap, so it is added to it. */
+@media (min-width: 1024px) {
+  .page.page.session {
+    --session: calc(680px + 2 * var(--space-6));
+    width: auto;
+    max-width: var(--session);
+    margin-inline-end: 0;
+    margin-inline-start: max(240px, calc(240px + (100% - 240px - var(--session)) / 2));
+  }
+}

@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 
-import { confirmCopy, expect, test } from "./fixtures";
+import { askToClear, confirmCopy, expect, test } from "./fixtures";
 import postgres from "postgres";
 
 import messages from "../messages/es.json";
@@ -271,7 +271,7 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     // Online, signed in: this is the render that must never overwrite the
     // cache — wait for the worker to settle the navigation before reading it.
     await page.goto("/registro");
-    await expect(page.getByRole("button", { name: messages.log.clear.trigger })).toBeVisible();
+    await expect(page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true })).toBeVisible();
     await expect.poll(() => isCached(page, "/registro")).toBe(true);
 
     // The session gone, same as a sign-out or an expired cookie — the local
@@ -281,7 +281,7 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     await context.setOffline(true);
     await page.goto("/registro");
 
-    await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+    await askToClear(page);
     await expect(page.getByRole("button", { name: messages.log.clear.accountAction })).toHaveCount(0);
   } finally {
     await context.setOffline(false);

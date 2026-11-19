@@ -18,9 +18,10 @@ export function Page({
 }: {
   children?: ReactNode;
   // `"panels"` keeps the reading measure up to 1280px and from there hands the whole width to `Panels`.
-  measure?: "reading" | "full" | "panels";
+  // `"session"` centres a 680px column in what the sidebar leaves: the review, one card at a time.
+  measure?: "reading" | "full" | "panels" | "session";
 }) {
-  const className = [styles.page, measure === "full" ? styles.full : undefined, measure === "panels" ? styles.panels : undefined]
+  const className = [styles.page, measure === "full" ? styles.full : undefined, measure === "panels" ? styles.panels : undefined, measure === "session" ? styles.session : undefined]
     .filter(Boolean)
     .join(" ");
   return (

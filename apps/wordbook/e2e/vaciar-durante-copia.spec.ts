@@ -7,7 +7,7 @@ import type { Page, Route } from "@playwright/test";
 import messages from "../messages/es.json";
 import { DATABASE_VERSION } from "../lib/log/record";
 import type { LookupRecord, SyncState } from "../lib/log/types";
-import { expect, test } from "./fixtures";
+import { askToClear, expect, test } from "./fixtures";
 
 // M32 («vaciar» waits for a sync round): the local wipe runs under the sync's
 // Web Lock, so a copy in flight finishes merging first and none of its rows
@@ -146,7 +146,8 @@ function rows(): SeedLookup[] {
   return [lookup("leave"), lookup("leaf"), lookup("left")];
 }
 
-const trigger = (page: Page) => page.getByRole("button", { name: clear("trigger"), exact: true });
+// «Vaciar el registro» is the last item of the «Descargar» menu: the menu is what shows and goes with the record.
+const trigger = (page: Page) => page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true });
 // Signed out, the one local action reads `soleAction`; signed in, `localAction`.
 const wipeLocal = (page: Page) =>
   page
@@ -193,7 +194,7 @@ test("Pending round: while the sync route is held, «Vaciar» confirms and shows
   await page.goto("/registro");
   await round.seen;
 
-  await trigger(page).click();
+  await askToClear(page);
   await wipeLocal(page).click();
   await expect(wiping(page)).toBeVisible();
   // The round holds the lock, so nothing was wiped yet.
@@ -210,7 +211,7 @@ test("Done after release: the round merges first, then the wipe, and the log sta
   await page.goto("/registro");
   await round.seen;
 
-  await trigger(page).click();
+  await askToClear(page);
   await wipeLocal(page).click();
   await expect(wiping(page)).toBeVisible();
 
@@ -230,7 +231,7 @@ test("No lock API: with navigator.locks absent, «Vaciar» still empties", async
   await page.goto("/registro");
   expect(await page.evaluate(() => navigator.locks)).toBeUndefined();
 
-  await trigger(page).click();
+  await askToClear(page);
   await wipeLocal(page).click();
   await expect(page.getByText(study("emptyTitle"), { exact: true })).toBeVisible();
   expect(await lookupCount(page)).toBe(0);
@@ -246,7 +247,7 @@ test("Failed: a store that refuses to clear shows the failed line and a retry", 
   await seed(page, { lookups: rows() });
   await page.goto("/registro");
 
-  await trigger(page).click();
+  await askToClear(page);
   await wipeLocal(page).click();
   await expect(page.getByRole("alert").filter({ hasText: clear("failed") })).toBeVisible();
   await expect(page.getByRole("button", { name: clear("retry"), exact: true })).toBeVisible();
@@ -266,7 +267,7 @@ test("Hung round: a sync route that never answers still lets «Vaciar» end, and
   await page.goto("/registro");
   await seen;
 
-  await trigger(page).click();
+  await askToClear(page);
   await wipeLocal(page).click();
   await expect(wiping(page)).toBeVisible();
 

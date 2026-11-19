@@ -140,3 +140,141 @@ test("RNL-03: at 1440px the box and the answer sit in the left panel, beside the
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
 });
+
+// Registro as one table by day and Repaso in a centred column (docs/wordbook/DESIGN.md
+// "Registro y Repaso en escritorio", RL-98). The record and one card are written straight into
+// the two databases, the way a reader's own searches and review would have left them.
+async function seedDesk(page: import("@playwright/test").Page): Promise<void> {
+  const now = Date.now();
+  const rows = [
+    { text: "throughout", translation: "de arriba abajo", at: now - 60_000 },
+    { text: "reliable", translation: "confiable", at: now - 120_000 },
+    { text: "though", translation: "aunque", at: now - 86_400_000 },
+  ];
+  await page.goto("/");
+  await expect(page.locator("main")).toBeVisible();
+  await page.evaluate(
+    ({ rows, now }) =>
+      new Promise<void>((resolve, reject) => {
+        const log = indexedDB.open("reading-log", 3);
+        log.onupgradeneeded = () => {
+          const store = log.result.createObjectStore("lookups", { keyPath: "id", autoIncrement: true });
+          store.createIndex("at", "at");
+          store.createIndex("normalised", "normalised");
+          log.result.createObjectStore("sync", { keyPath: "key" });
+          store.createIndex("foreign", ["device", "deviceSeq"], { unique: true });
+          store.createIndex("headword", "headword");
+        };
+        log.onsuccess = () => {
+          const tx = log.result.transaction("lookups", "readwrite");
+          for (const row of rows) {
+            tx.objectStore("lookups").add({
+              schema: 4,
+              at: row.at,
+              text: row.text,
+              normalised: row.text,
+              kind: "word",
+              outcome: "exact",
+              headword: row.text,
+              rule: null,
+              senses: 1,
+              translation: row.translation,
+              dictionaryReady: true,
+              origin: null,
+            });
+          }
+          tx.oncomplete = () => {
+            log.result.close();
+            const review = indexedDB.open("reading-review", 3);
+            review.onupgradeneeded = () => {
+              for (const name of ["cards", "senses", "gone", "meta"]) {
+                if (!review.result.objectStoreNames.contains(name)) review.result.createObjectStore(name, { keyPath: "key" });
+              }
+            };
+            review.onsuccess = () => {
+              const put = review.result.transaction("cards", "readwrite");
+              put.objectStore("cards").put({
+                key: "throughout",
+                due: now + 3 * 86_400_000,
+                stability: 3,
+                difficulty: 5,
+                scheduledDays: 3,
+                learningSteps: 0,
+                reps: 2,
+                lapses: 0,
+                state: 2,
+                lastReview: now - 86_400_000,
+                introducedOn: "2026-11-18",
+              });
+              put.oncomplete = () => {
+                review.result.close();
+                resolve();
+              };
+              put.onerror = () => reject(put.error);
+            };
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+        log.onerror = () => reject(log.error);
+      }),
+    { rows, now },
+  );
+}
+
+test("at 1440px Registro is one table by day with its column names, and a row's menu removes the word", async ({ page }) => {
+  await disableTranslator(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seedDesk(page);
+  await page.goto("/registro");
+
+  const table = page.getByRole("table", { name: messages.log.study.tableLabel });
+  await expect(table).toBeVisible();
+  await expect(page.getByRole("table")).toHaveCount(1);
+  for (const column of ["columnWord", "columnTranslation", "columnState", "columnTimes", "columnTime"] as const) {
+    await expect(table.getByRole("columnheader", { name: messages.log.study[column], exact: true })).toBeVisible();
+  }
+  // Two days, newest first: «Hoy · 2» then «Ayer · 1».
+  const days = table.getByRole("rowheader");
+  await expect(days).toHaveCount(2);
+  await expect(days.nth(0)).toHaveText(/^Hoy · 2$/i);
+  await expect(days.nth(1)).toHaveText(/^Ayer · 1$/i);
+  // A learning word says so; a word with no card draws a dash.
+  const throughout = table.getByRole("row").filter({ has: page.locator('a[href="/registro/throughout"]') });
+  await expect(throughout.getByRole("cell", { name: messages.log.study.stateLearning, exact: true })).toBeVisible();
+  expect(Math.round((await throughout.locator("> div").first().boundingBox())!.height)).toBe(52);
+
+  // The header carries the download menu and the review, and no figures or chips are left.
+  await expect(page.getByRole("button", { name: messages.log.study.downloadMenu, exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Repasar 2$/ })).toBeVisible();
+
+  await page.getByRole("button", { name: `Más acciones de «reliable»` }).click();
+  await page.getByRole("menuitem", { name: messages.log.study.removeRow }).click();
+  await page.getByRole("button", { name: messages.log.study.deleteConfirm, exact: true }).or(
+    page.getByRole("link", { name: messages.log.study.deleteConfirm, exact: true }),
+  ).click();
+  await expect(page.locator('a[href="/registro/reliable"]')).toHaveCount(0);
+  await expect(page.locator('a[href="/registro/throughout"]')).toBeVisible();
+});
+
+test("at 1440px the review is one 680px column centred in what the sidebar leaves", async ({ page }) => {
+  await disableTranslator(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seedDesk(page);
+  await page.goto("/repaso");
+  await expect(page.getByRole("button", { name: messages.review.show })).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+
+  const card = await page.locator("main section").first().boundingBox();
+  expect(card).not.toBeNull();
+  // The content area runs from the sidebar's 240px to the viewport's edge: 1200px, centre at 840.
+  expect(Math.abs(card!.x + card!.width / 2 - 840)).toBeLessThan(2);
+  expect(Math.abs(card!.width - 680)).toBeLessThan(2);
+
+  await page.getByRole("button", { name: messages.review.show }).click();
+  const grades = page.getByRole("button", { name: /^(Otra vez|Difícil|Bien|Fácil)/ });
+  await expect(grades).toHaveCount(4);
+  const boxes = await grades.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()));
+  for (const box of boxes) expect(Math.round(box.height)).toBe(64);
+  expect(Math.abs(boxes[0].width - boxes[3].width)).toBeLessThan(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
+});
