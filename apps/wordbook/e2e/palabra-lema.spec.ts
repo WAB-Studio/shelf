@@ -26,7 +26,7 @@ async function search(page: Page, text: string): Promise<void> {
   await page.getByRole("textbox", { name: messages.search.label }).fill(text);
 }
 
-// A translations line is one `<p>` holding the sense's glosses joined.
+// A translations line holds the sense's main gloss, then the others after « · ».
 function line(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true });
 }
@@ -45,8 +45,8 @@ async function precedes(a: Locator, b: Locator): Promise<boolean> {
 // pronunciation block, user 2026-10-08). `left` is an exact entry AND an
 // inflection of `leave`; its own senses are verb, adjective, adverb, noun.
 const OFFER = '«left» también es una forma de «leave»';
-const FIRST_GROUP = "sobras, sobrado"; // left, verbo
-const SECOND_GROUP = "izquierda, izquierdo, de izquierda"; // left, adjetivo
+const FIRST_GROUP = "sobras · sobrado"; // left, verbo
+const SECOND_GROUP = "izquierda · izquierdo, de izquierda"; // left, adjetivo
 const LAST_GROUP_DEFINITION = "The left side or direction."; // left, sustantivo
 const LEAVE_FIRST = "dejar, irse, abandonar"; // prefix of leave's verb line
 
@@ -100,10 +100,9 @@ test("RL-58: only the first group sits above the offer, never a second one", asy
       )
       .map((n) => n.textContent);
   }, OFFER);
-  // The first group's category is the first of the entry's index, which the filter above leaves out; no
-  // second group's label sits above the offer.
+  // Every sense of the first group is a row that names its own category, numbered; none stands bare above the offer.
   expect(labelsAbove).toEqual([]);
-  await expect(page.locator("main [data-entry-index]").first()).toContainText("verbo");
+  await expect(page.locator("main").first()).toContainText(/1 · verbo/i);
 });
 
 test("RL-58: at 360 the top of the leave block is less than one viewport from the start of the answer", async ({
@@ -143,7 +142,7 @@ test("RL-58: a word with no inflection (apple) answers alone", async ({ page }) 
   await expect(page.getByText("es una forma de", { exact: false })).toHaveCount(0);
   await expect(page.getByText("también es una forma", { exact: false })).toHaveCount(0);
   await expect(page.locator("main").getByRole("heading")).toHaveCount(1);
-  await expect(line(page, "manzana, poma")).toBeVisible();
+  await expect(line(page, "manzana · poma")).toBeVisible();
 });
 
 test("RL-58 keeps the bed clause: bed answers whole and offers no lemma block", async ({ page }) => {
@@ -154,7 +153,7 @@ test("RL-58 keeps the bed clause: bed answers whole and offers no lemma block", 
   await expect(page.getByText("es una forma de", { exact: false })).toHaveCount(0);
   await expect(page.locator("main").getByRole("heading")).toHaveCount(1);
   // Both of bed's groups are there, noun then verb.
-  await expect(page.getByText("cama, lecho", { exact: false })).toBeVisible();
+  await expect(page.getByText("cama · lecho", { exact: false })).toBeVisible();
   await expect(page.getByText("encamarse", { exact: false })).toBeVisible();
 });
 

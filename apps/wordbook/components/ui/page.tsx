@@ -18,9 +18,10 @@ export function Page({
 }: {
   children?: ReactNode;
   // `"panels"` keeps the reading measure up to 1280px and from there hands the whole width to `Panels`.
-  measure?: "reading" | "full" | "panels";
+  // `"margin"` does the same with the wider padding of the column-and-margin screen.
+  measure?: "reading" | "full" | "panels" | "margin";
 }) {
-  const className = [styles.page, measure === "full" ? styles.full : undefined, measure === "panels" ? styles.panels : undefined]
+  const className = [styles.page, measure === "full" ? styles.full : undefined, measure === "panels" ? styles.panels : undefined, measure === "margin" ? styles.margin : undefined]
     .filter(Boolean)
     .join(" ");
   return (

@@ -319,6 +319,16 @@ this gets built, and no schema, table or column is "prepared for" it.
   file. The dictionary's Worker is raised for the download alone, over the copy already on the device, and never downloads one; opening `/registro`
   mounts none. Decided by the user 2026-11-12.
   - Driven by `apps/wordbook/lib/log/anki.test.ts` and `apps/wordbook/e2e/export.spec.ts`.
+- [ ] **RL-97** *(refines RL-82 and RL-85)* — From 1280px the main screen is a 720px reading column and a 320px margin, 64px apart; below
+  it the margin stacks under the field. The palette is «Gris frío y azul» (`docs/wordbook/DESIGN.md`): no brand block and no marigold highlight; the
+  sidebar names the app in plain type. The column holds the field and the answer: the headword, its sound when it has one, «Escuchar» and the
+  number of senses, then every sense in one order ruled by hairlines, never boxed. A sense shows its part of speech (numbered «1 · » only when the
+  word has two or more), its main translation large with the others after « · » (up to four, then «ver N más»), its definition and example, and
+  exactly one control on the right: «Aprender», or «✓ Aprendiendo» for the sense the review draws. The margin holds the day's review (a count and
+  «Empezar») and, for an answered word, «Tu historia» and «Frases con ella». While the box holds a prefix with no answer yet, a panel under the field
+  lists up to six headwords with their main translation and a quiet note («Ya la buscaste», «frase»); ↑ ↓ move, Enter opens the lit row, Esc closes the
+  panel until the text changes. Phrases and the other answers keep the column and its type. Decided by the user 2026-11-19.
+  - Driven by `apps/wordbook/e2e/escritorio.spec.ts`.
 - [x] **RL-89** *(refines RL-75)* — In production, with no `CLIENT_KEY_SALT`, the sign-in mail is refused (`sendFailed`) as the paid
   routes answer 204: without the salt no cap counts a caller. Outside production the action stays open. Decided by the user 2026-11-08.
 - [x] **RL-78** *(successor of RL-68)* — The review also asks a phrase the reader translated, scheduled by the same FSRS logic as a word; a phrase still waiting for its answer or never translated stays out. A card shows one sense of a word, the one the reader saw, with its part of speech and its definition when it has one; a phrase shows its translation. An entry answered «Otra vez» comes back in the same session once it is due: the session is not finished while one waits, and says so. Where the review mixes words and phrases it counts «entradas», not «palabras». Decided by the user 2026-10-30.

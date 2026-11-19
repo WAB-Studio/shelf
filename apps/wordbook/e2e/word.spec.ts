@@ -61,7 +61,7 @@ const SUGGESTIONS_SETTLE_MS = 900;
 // merely contains it.
 function glossPattern(gloss: string): RegExp {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|, )${escaped}(,|$)`);
+  return new RegExp(`(^|, |· )${escaped}( ·|,|$)`);
 }
 
 function glossLocator(page: Page, gloss: string): Locator {
@@ -734,13 +734,13 @@ test("RL-51: a headword with one pronunciation draws no block, and keeps its IPA
 
   const order = await page.evaluate(() => {
     const labels = Array.from(document.querySelectorAll("main span"))
-      .filter((node) => node.closest("[data-entry-index]") === null)
-      .map((node) => node.textContent)
-      .filter((text) => text === "verbo" || text === "sustantivo");
+      .map((node) => node.textContent ?? "")
+      .filter((text) => /^\d+ · (verbo|sustantivo)$/.test(text));
     return labels;
   });
-  // The verb is the first of the header's index and draws no label of its own beneath it.
-  expect(order).toEqual(["sustantivo"]);
+  // Every sense is a numbered row: the verb leads, the noun follows.
+  expect(order[0]).toBe("1 · verbo");
+  expect(order.some((text) => text.endsWith("sustantivo"))).toBe(true);
 });
 
 // `lib/dictionary/pos-frequency.ts` scores "p" for proper noun and
@@ -765,7 +765,9 @@ test("a proper noun is labelled a proper noun, and the word «pronombre» is dra
   await searchBox.fill("facebook");
   await expect(page.getByRole("heading", { name: "facebook", exact: true })).toBeVisible({ timeout: 5000 });
 
-  await expect(page.getByText(messages.word.pos.pn, { exact: true }).first()).toBeVisible();
+  // The proper noun is the sense the entry folds as seldom met; its row names its category once opened.
+  await openRareSenses(page);
+  await expect(page.getByText(new RegExp(`^(\\d+ · )?${messages.word.pos.pn}$`)).first()).toBeVisible();
   await expect(page.getByText("pronombre", { exact: true })).toHaveCount(0);
 });
 

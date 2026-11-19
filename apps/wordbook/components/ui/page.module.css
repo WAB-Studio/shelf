@@ -64,9 +64,17 @@
    the sidebar leaves; `Panels` centres its own 1120px inside it. Three classes to outrank the
    centred reading column above. */
 @media (min-width: 1280px) {
-  .page.page.panels {
+  .page.page.panels,
+  .page.page.margin {
     margin-inline-start: 240px;
     width: auto;
     max-width: none;
+  }
+}
+
+/* Buscar's own air: the column and the margin sit 56px from the sidebar and the top. */
+@media (min-width: 1280px) {
+  .page.page.margin {
+    padding: 40px 56px;
   }
 }

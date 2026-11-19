@@ -13,6 +13,7 @@ export function Panels({
   sideOnPhone = true,
   sideLast = false,
   reserveSide = false,
+  layout = "split",
   children,
 }: {
   top?: ReactNode;
@@ -21,10 +22,14 @@ export function Panels({
   // On a phone the side follows `children` instead of preceding them.
   sideLast?: boolean;
   reserveSide?: boolean;
+  // `"margin"`: a 720px reading column and a 320px margin, 64px apart, with no card around the margin
+  // (docs/wordbook/DESIGN.md «Gris frío y azul, columna y margen»).
+  layout?: "split" | "margin";
   children?: ReactNode;
 }) {
   const hasSide = reserveSide || (side !== undefined && side !== null && side !== false);
-  const className = hasSide ? styles.panels : `${styles.panels} ${styles.solo}`;
+  const base = hasSide ? styles.panels : `${styles.panels} ${styles.solo}`;
+  const className = layout === "margin" ? `${base} ${styles.margin}` : base;
   return (
     <div className={className}>
       <div className={styles.top}>{top}</div>

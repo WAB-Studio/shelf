@@ -21,8 +21,7 @@ import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
 import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
-import { BrandBlock, Flex, Highlight, Live, Panels } from "@/components/ui";
-import { ReviewCard } from "@/components/review/review-card";
+import { Flex, Live, Panels, Text } from "@/components/ui";
 import { InstallStatus } from "./install-status";
 import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
@@ -30,7 +29,8 @@ import { SearchBox } from "./search-box";
 import { SenseList } from "./sense-list";
 import { functionWordTranslation } from "@/lib/phrase/function-words";
 import { Starters } from "./starters";
-import { Suggestions } from "./suggestions";
+import { useSuggestionRows } from "./suggestions";
+import { ReviewRow } from "./review-row";
 import { WordStoryPanel } from "./word-story-panel";
 
 // The query string's own name: `/?q=book`.
@@ -596,25 +596,35 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     phrase: phraseState.kind,
   });
 
-  // The word the answer on screen is about, for the second panel on a wide screen.
+  // The word the answer on screen is about, for the margin on a wide screen.
   const storyWord = kind.kind === "word" && wordAnswer !== null && wordFound && tableLine === null
     ? (wordAnswer.exact?.headword ?? wordAnswer.viaInflection[0].lemma)
     : null;
-  // The second panel is reserved in every state, so the grid does not move as the reader types, looks a word up or
-  // reads a phrase; it holds something only for an empty box and for an answered word.
-  const side =
-    kind.kind === "empty" ? <ReviewCard /> : kind.kind === "word" && storyWord !== null ? <WordStoryPanel headword={storyWord} /> : undefined;
+  // The margin is reserved in every state, so the grid does not move as the reader types, looks a word up or
+  // reads a phrase; it holds the day's review for any box and the word's story for an answered word.
+  const side = (
+    <Flex direction="column" gap="4">
+      <ReviewRow />
+      {storyWord !== null && <WordStoryPanel headword={storyWord} />}
+    </Flex>
+  );
+  // The panel under the field offers headwords while the box holds a prefix with no answer of its own yet.
+  const suggestionRows = useSuggestionRows(!wordFound && tableLine === null ? suggestions : [], lookup);
 
   return (
     <>
       <Live>{announcement.polite ? tLive(announcement.polite.key, { count: announcement.polite.count ?? 0 }) : ""}</Live>
       <Live assertive>{announcement.assertive ? tLive(announcement.assertive) : ""}</Live>
       <Panels
+        layout="margin"
         top={
           <>
-            <BrandBlock title={tSearch.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })} line={tSearch.rich("brandLine", { mark: (chunks) => <Highlight>{chunks}</Highlight> })} compact={kind.kind !== "empty"}>
-              <SearchBox value={text} onChange={handleTextChange} />
-            </BrandBlock>
+            <SearchBox value={text} onChange={handleTextChange} rows={suggestionRows} />
+            {kind.kind === "empty" && (
+              <Text size="3" muted>
+                {tSearch("brandLine")}
+              </Text>
+            )}
             <InstallStatus status={status} onRetry={retry} query={text} />
           </>
         }
@@ -625,7 +635,6 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
         {kind.kind === "empty" && <Starters onPick={handleTextChange} />}
         {kind.kind === "word" && (
           <Flex direction="column" gap="4">
-            {!wordFound && tableLine === null && <Suggestions items={suggestions} onPick={handleTextChange} />}
             {wordAnswer && tableLine !== null && (
               <FunctionWordBlock
                 part={{ token: text, answer: wordAnswer }}

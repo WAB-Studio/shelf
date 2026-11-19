@@ -35,13 +35,13 @@ async function lookUp(page: Page, words: string[]): Promise<void> {
   }
 }
 
-test("a rare-labelled sense of the most frequent part of speech stays: blind shows «ciego» with no fold, index first", async ({
+test("a rare-labelled sense of the most frequent part of speech stays: blind shows «ciego» with no fold, adjective first", async ({
   page,
 }) => {
   await open(page, "/", 390);
   await box(page).fill("blind");
-  const index = page.locator("main [data-entry-index]").first();
-  await expect(index).toContainText(new RegExp(`^[^]*${messages.word.pos.adj}[^]*${messages.word.pos.v}`, "i"));
+  // Each sense names its own part of speech now: the adjective leads, the verb follows.
+  await expect(page.locator("main")).toContainText(new RegExp(`${messages.word.pos.adj}[^]*${messages.word.pos.v}`, "i"));
   await expect(page.getByText("ciego", { exact: false }).first()).toBeVisible();
 });
 
@@ -82,7 +82,7 @@ for (const width of [1280, 1600]) {
     await open(page, "/", width);
     edges.push(Math.round((await box(page).boundingBox())!.x));
     expect(new Set(edges.slice(0, 3)).size).toBe(1);
-    // The box sits inside the green band, a padding in from the same edge.
+    // The box sits a padding in from the same edge.
     expect(Math.abs(edges[3] - edges[0])).toBeLessThan(40);
   });
 }

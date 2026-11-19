@@ -33,7 +33,10 @@ export function splitTranslations(text: string): string[] {
 // The translations a reader sees before asking for the rest.
 export const TRANSLATIONS_SHOWN = 3;
 
-// The first `TRANSLATIONS_SHOWN`, and how many wait behind «ver más».
-export function previewTranslations(items: readonly string[]): { shown: string[]; hidden: number } {
-  return { shown: items.slice(0, TRANSLATIONS_SHOWN), hidden: Math.max(0, items.length - TRANSLATIONS_SHOWN) };
+// The first `limit` (three by default), and how many wait behind «ver más».
+export function previewTranslations(
+  items: readonly string[],
+  limit: number = TRANSLATIONS_SHOWN,
+): { shown: string[]; hidden: number } {
+  return { shown: items.slice(0, limit), hidden: Math.max(0, items.length - limit) };
 }

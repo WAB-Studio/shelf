@@ -10,15 +10,20 @@ import styles from "./text-field.module.css";
 // field a reader must find; the rest keep the hairline. `label` draws the
 // field's name above it, always visible, and names the input for a screen
 // reader too.
-type RootProps = ComponentPropsWithoutRef<typeof ThemesTextField.Root> & { edge?: boolean; label?: string };
+// `pill` is the main search field: 52px tall on the raised ground, its text at 17px.
+type RootProps = ComponentPropsWithoutRef<typeof ThemesTextField.Root> & {
+  edge?: boolean;
+  label?: string;
+  pill?: boolean;
+};
 
 const Root = forwardRef<ComponentRef<typeof ThemesTextField.Root>, RootProps>(function Root(
-  { className, edge, label, id, ...props },
+  { className, edge, label, pill, id, ...props },
   ref,
 ) {
   const generated = useId();
   const inputId = id ?? generated;
-  const classes = [styles.tap44, edge ? styles.edge : undefined, className].filter(Boolean).join(" ");
+  const classes = [styles.tap44, edge ? styles.edge : undefined, pill ? styles.pill : undefined, className].filter(Boolean).join(" ");
   const field = <ThemesTextField.Root ref={ref} {...props} id={inputId} className={classes} />;
   if (label === undefined) return field;
   return (

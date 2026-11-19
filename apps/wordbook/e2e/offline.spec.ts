@@ -73,7 +73,7 @@ test("the app opens with no connection, from its own cache, never the browser's"
   // never carries this input — and an answer, not an eternal install message.
   await expect(searchBox).toBeEditable();
   await searchBox.fill("apple");
-  await expect(page.getByText("manzana, poma", { exact: true })).toBeVisible();
+  await expect(page.getByText("manzana · poma", { exact: true })).toBeVisible();
   await expect(page.getByText(messages.install.failed, { exact: true })).toHaveCount(0);
 
   // The 8.2 MB payload has its own store; the shell's cache must never hold
@@ -654,7 +654,7 @@ test("W5: offline, /?q=apple opens with apple's answer though it was never visit
 
   await context.setOffline(true);
   await page.goto("/?q=apple");
-  await expect(page.getByText("manzana, poma", { exact: true })).toBeVisible();
+  await expect(page.getByText("manzana · poma", { exact: true })).toBeVisible();
   await expect(page.getByText(messages.install.failed, { exact: true })).toHaveCount(0);
 });
 

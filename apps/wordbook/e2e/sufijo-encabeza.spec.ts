@@ -28,14 +28,14 @@ async function loadDictionary(page: Page): Promise<void> {
 // share its line with the sense's other translations
 // (docs/wordbook/DESIGN.md "The translations are one line, separated by
 // commas"), so the match is bounded by the line's own start, end or `, `
-// rather than an exact `textContent` — a POS label such as "verbo" is a
-// line of its own either way and still matches.
+// rather than an exact `textContent` — a POS label such as "verbo" still
+// matches behind its «1 · » number, and the main gloss before its « · ».
 async function textLeads(page: Page, first: string, second: string): Promise<boolean | null> {
   return page.evaluate(
     ({ first, second }) => {
       const glossNode = (gloss: string) =>
         Array.from(document.querySelectorAll("span, p")).find((n) =>
-          new RegExp(`(^|, )${gloss}(,|$)`).test(n.textContent ?? ""),
+          new RegExp(`(^|, |· )${gloss}( ·|,|$)`).test(n.textContent ?? ""),
         );
       const a = glossNode(first);
       const b = glossNode(second);
@@ -50,7 +50,7 @@ async function textLeads(page: Page, first: string, second: string): Promise<boo
 // visibility rather than the order of two.
 function glossLocator(page: Page, gloss: string): Locator {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, )${escaped}(,|$)`));
+  return page.getByText(new RegExp(`(^|, |· )${escaped}( ·|,|$)`));
 }
 
 // The five forms the validator measured live against the screen on

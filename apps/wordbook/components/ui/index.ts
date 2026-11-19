@@ -17,8 +17,6 @@ export { AppTheme } from "./theme";
 
 export { Box } from "./box";
 
-export { BrandBlock } from "./brand-block";
-
 export { Card } from "./card";
 
 export { Figure } from "./figure";
@@ -62,3 +60,9 @@ export { PosLabel } from "./label";
 export { MetaLabel } from "./meta-label";
 
 export { Live } from "./live";
+
+export { SuggestPanel, suggestOptionId, type SuggestRow } from "./suggest-panel";
+
+export { SenseRow } from "./sense-row";
+
+export { PillRow } from "./pill-row";

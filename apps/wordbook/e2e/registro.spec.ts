@@ -500,8 +500,8 @@ test("RNL-02: the failed /registro title is full-weight ink, never muted, accent
   await breakIndexedDB(page);
 
   const palette = {
-    light: { ink: "#17160F", muted: "#6B675A" },
-    dark: { ink: "#F0EBDD", muted: "#9A9484" },
+    light: { ink: "#15181D", muted: "#5F6670" },
+    dark: { ink: "#E9ECF1", muted: "#959CA7" },
   } as const;
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
@@ -545,8 +545,8 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
     const palette = {
       // «Verde botella»: the accent text is bottle green in light, mint in dark; the filled button
       // stays bottle green in both.
-      light: { accent: "#0C5A43", solid: "#0C5A43", muted: "#6B675A" },
-      dark: { accent: "#5FCFA3", solid: "#0C5A43", muted: "#9A9484" },
+      light: { accent: "#2D5BA8", solid: "#2D5BA8", muted: "#5F6670" },
+      dark: { accent: "#8DB4F2", solid: "#8DB4F2", muted: "#959CA7" },
     } as const;
 
     for (const scheme of ["light", "dark"] as const) {
@@ -577,7 +577,7 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
       expect(await computedColor(accountAction)).toBe(hexToRgb(palette[scheme].muted));
 
       // The captions under both options are the quietest role.
-      const quiet = { light: "#787263", dark: "#898271" } as const;
+      const quiet = { light: "#737A84", dark: "#858C97" } as const;
       expect(await computedColor(page.getByText(messages.log.clear.localBody))).toBe(hexToRgb(quiet[scheme]));
       expect(await computedColor(page.getByText(messages.log.clear.accountBody))).toBe(hexToRgb(quiet[scheme]));
     }
@@ -591,7 +591,7 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
 // WCAG 1.4.3 / 1.4.11 on the quietest ink and the search field's edge
 // (docs/wordbook/DESIGN.md "Tokens"): each hex is the nearest same-hue value
 // that clears 4.5:1 (text) or 3:1 (edge) on ground and on raised, in both modes.
-test("the «generated» mark reads at 4.5:1 and the search field's edge at 3:1, while a card's border stays #DED8C8", async ({
+test("the «generated» mark reads at 4.5:1 and the search field's edge at 3:1, while a card's border stays the light hairline", async ({
   page,
   stubWordText,
 }) => {
@@ -600,9 +600,9 @@ test("the «generated» mark reads at 4.5:1 and the search field's edge at 3:1, 
     definition: "A small domestic animal.",
   });
   const palette = {
-    // The search box sits on the brand block, whose field edge is the same soft green in both modes.
-    light: { quiet: "#787263", edge: "#9FC4B4", border: "#DED8C8" },
-    dark: { quiet: "#898271", edge: "#9FC4B4", border: "#302E25" },
+    // The search field keeps a 3:1 grey edge in each mode; a card's hairline border is lighter.
+    light: { quiet: "#737A84", edge: "#8A919B", border: "#D7DBE0" },
+    dark: { quiet: "#858C97", edge: "#6B727D", border: "#2E333B" },
   } as const;
 
   const assetResponse = page.waitForResponse(

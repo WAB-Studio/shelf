@@ -56,6 +56,8 @@ Light, the same design inverted:
 - The main screen holds one dark brand block (`BrandBlock`): the name with «Book» on the highlight, a line, the search box.
 - Radix scale is `green`, not `indigo`; `theme.css` overrides its steps with the tokens below.
 
+_Superseded 2026-11-19 by «Gris frío y azul» below: the colour table here, the brand block and the marigold highlight no longer apply; the type, the pill shape and the rest stand._
+
 | role | value | ratio |
 |---|---|---|
 | accent, light | `#0C5A43` | 7.73 on `#FAF8F2`, 8.21 on `#FFFFFF` |
@@ -2009,3 +2011,30 @@ Taken by the user: the review travels with the account (RL-93), replacing «no v
 - **The confirmation before «Vaciar el registro» carries one more line under its body** (RL-94): with an account, that the account keeps the review if the
   reader empties only this device and loses it if the account is emptied too; with none, that the review lives only here and goes with the record.
 - **No board was drawn.** Both are lines of copy in screens already approved.
+
+## Decisión 2026-11-19: Gris frío y azul, columna y margen
+
+Chosen by the user from boards (`C-frio`). Replaces «Verde botella»'s palette; Fraunces stays the one serif (Newsreader is not loaded, so the main translation is Fraunces 30/600 too).
+
+| role | light | dark |
+|---|---|---|
+| ground | `#F7F8F9` | `#121418` |
+| raised | `#FFFFFF` | `#1A1D23` |
+| line | `#E3E6EA` | `#262A31` |
+| border | `#D7DBE0` | `#2E333B` |
+| ink | `#15181D` | `#E9ECF1` |
+| ink, secondary | `#343A42` | `#D5DAE1` |
+| muted | `#5F6670` | `#959CA7` |
+| muted, quietest | `#737A84` | `#858C97` |
+| sidebar | `#EFF1F4` | `#15181C` |
+| accent | `#2D5BA8` | `#8DB4F2` |
+| accent soft | `#E6EDF8` | `#1E2A3E` |
+| text on accent | `#FFFFFF` | `#0F1A2C` |
+
+- The Radix scale is `blue`; `app/theme.css` maps its steps to these tokens. The search field's edge stays a 3:1 grey (`--rl-control-edge`), not the hairline border.
+- No marigold, no dark block: the wordmark is plain «WordBook» in Fraunces 700. A marked word in a phrase sits on the soft accent.
+- **Sidebar (from 1024px).** 240px on the sidebar colour with a right hairline; the wordmark, then Buscar / Registro / Cuenta as text; the current one on the raised colour with `inset 3px 0 0` accent; the theme choice quiet at the foot. The phone keeps its bottom bar.
+- **Buscar (from 1280px).** A grid of a 720px reading column and a 320px margin, 64px apart. Row 1: the field (pill, 52px, raised, border, ✕ to clear) and, in the margin, «N para repasar hoy · Empezar» (a quiet line when nothing is due). Below the field: the headword (Fraunces 60/700), a line with the IPA (omitted when null: 43% of entries have none), «Escuchar» and «N sentidos»; then every sense in one order, ruled by hairlines, no cards.
+- **A sense.** The label in 11px/600/0.12em uppercase accent, prefixed «1 · » only with two or more senses; the main translation large (30/600) and the others after « · » in muted 21px, «ver N más» only past four; the definition and the example in muted type; one button on the right: «Aprender» outline, or «✓ Aprendiendo» on the accent soft. The one-sense case (median) is the one designed first.
+- **The margin** holds, ruled by hairlines, «Tu historia» (times searched, first date, learning state, «Repasar ahora») and «Frases con ella». Phrases and the other answers (no entry, AI answer, failure) stay in the column with the same type.
+- **Suggestions.** A panel under the field: raised, border, radius 18, soft shadow; rows «word translation» with a quiet note on the right («Ya la buscaste», «frase»); the lit row on the sidebar colour; the foot «↑ ↓ para elegir · Enter para abrir» and «Esc para cerrar». Part B (Registro, Repaso) follows in its own decision.

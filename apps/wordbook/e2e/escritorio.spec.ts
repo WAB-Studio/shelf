@@ -54,9 +54,9 @@ test("one <nav> at the side on every route, never a bar at the foot", async ({ p
   }
 });
 
-test("from 1280px the main screen is two panels in what the sidebar leaves: the entry and a 380px side", async ({ page }) => {
+test("from 1280px the main screen is a reading column and a 320px margin, both right of the sidebar", async ({ page }) => {
   await disableTranslator(page);
-  // An answer keeps its second panel; the empty screen draws one only once the record has a review to offer.
+  // An answer keeps its margin; the empty screen draws one only once the record has a review to offer.
   await page.goto("/?q=throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => document.fonts.ready);
@@ -73,14 +73,14 @@ test("from 1280px the main screen is two panels in what the sidebar leaves: the 
   expect(side).not.toBeNull();
   expect(field).not.toBeNull();
 
-  // The sidebar's 240px and the page's 32px padding on both sides; the panels keep 1120px at most.
-  const room = viewport!.width - 240 - 64;
-  expect(Math.abs(panels!.width - Math.min(1120, room))).toBeLessThan(2);
+  // The sidebar's 240px and the page's 56px padding on both sides; the grid keeps 1104px at most.
+  const room = viewport!.width - 240 - 112;
+  expect(Math.abs(panels!.width - Math.min(1104, room))).toBeLessThan(2);
   expect(panels!.x).toBeGreaterThanOrEqual(navBox!.x + navBox!.width);
-  expect(Math.abs(side!.width - 380)).toBeLessThan(1);
+  expect(Math.abs(side!.width - 320)).toBeLessThan(1);
   expect(side!.x + side!.width).toBeLessThanOrEqual(panels!.x + panels!.width + 1);
-  // The box lives in the entry's panel, left of the side.
-  expect(field!.x + field!.width).toBeLessThanOrEqual(side!.x);
+  // The box lives in the reading column, left of the margin and 64px from it.
+  expect(field!.x + field!.width).toBeLessThanOrEqual(side!.x - 63);
 });
 
 // `measure="full"` shipped with the 660px rule's `width: 100%` still in
@@ -114,29 +114,70 @@ for (const route of ["/registro", "/registro/apple", "/cuenta"]) {
   });
 }
 
-test("RNL-03: at 1440px the box and the answer sit in the left panel, beside the 380px side", async ({ page }) => {
+test("RL-97: at 1440px the sidebar sits left of the column, the margin right of it, and each sense has one learn button", async ({
+  page,
+}) => {
   await disableTranslator(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/?q=throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => document.fonts.ready);
 
+  const nav = await page.getByRole("navigation", { name: messages.nav.label }).boundingBox();
   const panels = await page.locator("main > div").first().boundingBox();
   const side = await page.locator("main aside").boundingBox();
   const searchBox = await page.getByRole("textbox", { name: messages.search.label }).boundingBox();
   const answer = await page.getByRole("heading", { name: "throughout" }).boundingBox();
+  expect(nav).not.toBeNull();
   expect(panels).not.toBeNull();
   expect(side).not.toBeNull();
   expect(searchBox).not.toBeNull();
   expect(answer).not.toBeNull();
 
-  // 1120px from the same left edge as the screens beside it: the sidebar's 240px and the page's 32px padding.
-  expect(Math.abs(panels!.width - 1120)).toBeLessThan(2);
-  expect(Math.abs(panels!.x - (240 + 32))).toBeLessThan(2);
-  expect(Math.abs(side!.width - 380)).toBeLessThan(1);
+  expect(nav!.x + nav!.width).toBeLessThanOrEqual(panels!.x);
+  expect(Math.abs(panels!.x - (240 + 56))).toBeLessThan(2);
+  expect(Math.abs(side!.width - 320)).toBeLessThan(1);
   for (const inner of [searchBox!, answer!]) {
     expect(inner.x).toBeGreaterThanOrEqual(panels!.x - 1);
     expect(inner.x + inner.width).toBeLessThanOrEqual(side!.x);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
+
+  // `throughout` has two senses: numbered, and one control on each, never two.
+  const learn = page.getByRole("button", { name: new RegExp(`^(${messages.word.learnThisSense}|${messages.word.learningThisSense})$`) });
+  await expect(learn).toHaveCount(2);
+  await expect(page.getByText(/^1 · /)).toHaveCount(1);
+  await expect(page.getByText(/^2 · /)).toHaveCount(1);
+
+  // A word with one sense is not numbered and still has its one control.
+  await page.goto("/?q=apple");
+  await expect(page.getByRole("heading", { name: "apple" })).toBeVisible({ timeout: 10000 });
+  await expect(learn).toHaveCount(1);
+  await expect(page.getByText(/^\d+ · /)).toHaveCount(0);
+});
+
+test("RL-97: the panel of suggestions answers ↓, Enter and Esc", async ({ page }) => {
+  await disableTranslator(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const field = page.getByRole("textbox", { name: messages.search.label });
+  await field.fill("throu");
+
+  const options = page.getByRole("option");
+  await expect(options.first()).toBeVisible({ timeout: 10000 });
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await field.press("ArrowDown");
+  await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
+
+  await field.press("Escape");
+  await expect(options).toHaveCount(0);
+  // The text is untouched, and typing again brings the panel back.
+  await expect(field).toHaveValue("throu");
+  await field.press("g");
+  await expect(options.first()).toBeVisible();
+
+  await field.press("ArrowDown");
+  const word = (await options.nth(1).locator("span").nth(1).textContent())!.trim();
+  await field.press("Enter");
+  await expect(field).toHaveValue(word);
 });

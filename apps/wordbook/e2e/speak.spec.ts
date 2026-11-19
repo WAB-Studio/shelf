@@ -66,7 +66,7 @@ test("RL-26: a headword with IPA can be heard, in the browser's own voice", asyn
 
   const box = await speakButton.boundingBox();
   expect(box).not.toBeNull();
-  expect(Math.round(box!.width)).toBe(44);
+  expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44);
   expect(Math.round(box!.height)).toBe(44);
 
   await speakButton.click();
@@ -168,7 +168,7 @@ test("RL-26: pressing the speak control fires no network request of its own", as
   expect(decoration.length).toBeLessThanOrEqual(2);
 });
 
-test("RL-26 at 360px, dark: 44px tap target, muted glyph #9a9484", async ({ page }) => {
+test("RL-26 at 360px, dark: 44px tap target, accent glyph #8db4f2", async ({ page }) => {
   await deleteTranslator(page);
   await captureSpeech(page);
   await page.setViewportSize({ width: 360, height: 740 });
@@ -182,14 +182,14 @@ test("RL-26 at 360px, dark: 44px tap target, muted glyph #9a9484", async ({ page
 
   const box = await speakButton.boundingBox();
   expect(box).not.toBeNull();
-  expect(Math.round(box!.width)).toBe(44);
+  expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44);
   expect(Math.round(box!.height)).toBe(44);
 
   const colour = await speakButton.evaluate((el) => getComputedStyle(el).color);
-  expect(colour).toBe("rgb(154, 148, 132)");
+  expect(colour).toBe("rgb(141, 180, 242)");
 });
 
-test("RL-26 at 1280px, light: 44px tap target, muted glyph #6b675a", async ({ page }) => {
+test("RL-26 at 1280px, light: 44px tap target, accent glyph #2d5ba8", async ({ page }) => {
   await deleteTranslator(page);
   await captureSpeech(page);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -203,9 +203,9 @@ test("RL-26 at 1280px, light: 44px tap target, muted glyph #6b675a", async ({ pa
 
   const box = await speakButton.boundingBox();
   expect(box).not.toBeNull();
-  expect(Math.round(box!.width)).toBe(44);
+  expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44);
   expect(Math.round(box!.height)).toBe(44);
 
   const colour = await speakButton.evaluate((el) => getComputedStyle(el).color);
-  expect(colour).toBe("rgb(107, 103, 90)");
+  expect(colour).toBe("rgb(45, 91, 168)");
 });

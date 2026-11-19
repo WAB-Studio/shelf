@@ -11,7 +11,7 @@ import { readWordStory, type WordStory } from "@/lib/log/story";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import { dueWhen } from "@/lib/review/schedule";
 import { readCards } from "@/lib/review/store";
-import { Button, Card, Flex, MarkedWord, MetaLabel, Separator, Text } from "@/components/ui";
+import { Flex, Link, MarkedWord, MetaLabel, Separator, TapTarget, Text } from "@/components/ui";
 
 type Review = { kind: "new" } | { kind: "due" } | { kind: "later"; due: number; when: "today" | "tomorrow" | "later" };
 
@@ -58,53 +58,51 @@ export function WordStoryPanel({ headword }: { headword: string }) {
   if (story === null) return null;
 
   return (
-    <Card>
-      <Flex direction="column" gap="4">
-        <Flex direction="column" gap="1">
-          <MetaLabel>{t("title")}</MetaLabel>
-          <Text variant="translation">
-            {story.times === 0 ? t("neverSearched") : t("searched", { count: story.times })}
-          </Text>
-          {story.firstAt !== null && (
-            <Text size="2" muted>
-              {t("first", { date: format.dateTime(story.firstAt, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(story.firstAt, openedAt, timeZone) }) })}
-            </Text>
-          )}
-        </Flex>
-        <Separator size="4" />
-        <Flex direction="column" gap="2">
-          <MetaLabel>{t("phrasesTitle")}</MetaLabel>
-          {story.phrases.length === 0 ? (
-            <Text size="2" muted>
-              {t("noPhrases")}
-            </Text>
-          ) : (
-            story.phrases.map((phrase) => (
-              <Text key={phrase} size="3" english>
-                <MarkedWord text={phrase} forms={story.forms} />
-              </Text>
-            ))
-          )}
-        </Flex>
-        <Separator size="4" />
-        <Flex direction="column" gap="3" align="start">
+    <Flex direction="column" gap="4">
+      <Separator size="4" />
+      <Flex direction="column" gap="1">
+        <MetaLabel>{t("title")}</MetaLabel>
+        <Text serif size="5" weight="bold">
+          {story.times === 0 ? t("neverSearched") : t("searched", { count: story.times })}
+        </Text>
+        {story.firstAt !== null && (
           <Text size="2" muted>
-            {review.kind === "new"
-              ? t("reviewNew")
-              : review.kind === "due"
-                ? t("reviewDue")
-                : t("reviewLater", {
-                    when: review.when,
-                    date: format.dateTime(review.due, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(review.due, openedAt, timeZone) }),
-                  })}
+            {t("first", { date: format.dateTime(story.firstAt, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(story.firstAt, openedAt, timeZone) }) })}
           </Text>
-          <Button asChild size="3" variant="soft">
-            <NextLink href={`/repaso?palabra=${encodeURIComponent(headword)}`} prefetch={false}>
-              {t("reviewNow")}
-            </NextLink>
-          </Button>
-        </Flex>
+        )}
+        <Text size="2" muted>
+          {review.kind === "new"
+            ? t("reviewNew")
+            : review.kind === "due"
+              ? t("reviewDue")
+              : t("reviewLater", {
+                  when: review.when,
+                  date: format.dateTime(review.due, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(review.due, openedAt, timeZone) }),
+                })}
+        </Text>
+        <Link asChild>
+          <NextLink href={`/repaso?palabra=${encodeURIComponent(headword)}`} prefetch={false}>
+            <TapTarget align="center">
+              <Text size="2" weight="bold">{t("reviewNow")}</Text>
+            </TapTarget>
+          </NextLink>
+        </Link>
       </Flex>
-    </Card>
+      <Separator size="4" />
+      <Flex direction="column" gap="2">
+        <MetaLabel>{t("phrasesTitle")}</MetaLabel>
+        {story.phrases.length === 0 ? (
+          <Text size="2" muted>
+            {t("noPhrases")}
+          </Text>
+        ) : (
+          story.phrases.map((phrase) => (
+            <Text key={phrase} size="3" english>
+              <MarkedWord text={phrase} forms={story.forms} />
+            </Text>
+          ))
+        )}
+      </Flex>
+    </Flex>
   );
 }

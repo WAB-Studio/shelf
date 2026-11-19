@@ -59,6 +59,10 @@
   text-rendering: geometricPrecision;
 }
 
+.glyph {
+  display: flex;
+}
+
 /* The sidebar-only heading and the sidebar-only foot reserve: both collapse
    to nothing on the bar, below 1024px. */
 .title {
@@ -78,44 +82,53 @@
   .nav {
     inset-inline: 0 auto;
     inset-block: 0;
+    box-sizing: border-box;
     width: 240px;
     max-width: none;
     margin-inline: 0;
     flex-direction: column;
     align-items: stretch;
+    gap: 2px;
+    background: var(--rl-sidebar);
     border-top: none;
     border-inline-end: 1px solid var(--rl-line);
-    padding-bottom: 0;
-    padding-block: var(--space-6);
+    padding: 30px 18px;
   }
 
   .title.title {
     display: block;
-    padding-inline: 18px;
-    margin: 0 0 var(--space-6) 0;
-    font-size: 21px;
+    padding-inline: 14px;
+    margin: 0 0 26px 0;
   }
 
-  /* Doubled to outrank the mobile row's own `.item.item` above. */
+  /* Doubled to outrank the mobile row's own `.item.item` above. The current section sits on the
+     raised ground with a 3px accent edge, an inset shadow so no layout shifts. */
   .item.item {
     flex: 0 0 auto;
     justify-content: flex-start;
     min-height: 44px;
-    padding-inline-start: 18px;
-    border-inline-start: 2px solid transparent;
+    padding-inline: 14px;
+    border-radius: 10px;
   }
 
   .item.item.selected {
-    border-inline-start-color: var(--rl-accent);
+    background: var(--rl-raised);
+    color: var(--rl-ink);
+    box-shadow: inset 3px 0 0 var(--rl-accent);
   }
 
-  /* docs/wordbook/DESIGN.md: the sidebar has room, so its labels read as words,
-     15px sentence case, and not as the bar's 11px capitals. */
+  /* The sidebar has room, so its labels read as words, 15px sentence case,
+     and not as the bar's 11px capitals. */
   .label {
     font-size: 15px;
     font-weight: 600;
     letter-spacing: 0;
     text-transform: none;
+  }
+
+  /* The glyph is the bar's; the sidebar names its sections in text alone. */
+  .glyph {
+    display: none;
   }
 
   .spacer {
@@ -125,6 +138,6 @@
 
   .foot {
     display: block;
-    padding-inline: 18px;
+    padding-inline: 14px;
   }
 }
