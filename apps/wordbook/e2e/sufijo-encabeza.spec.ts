@@ -35,7 +35,7 @@ async function textLeads(page: Page, first: string, second: string): Promise<boo
     ({ first, second }) => {
       const glossNode = (gloss: string) =>
         Array.from(document.querySelectorAll("span, p")).find((n) =>
-          new RegExp(`(^|, |· )${gloss}( ·|,|$)`).test(n.textContent ?? ""),
+          new RegExp(`(^|, |· )${gloss}(,|$)`).test(n.textContent ?? ""),
         );
       const a = glossNode(first);
       const b = glossNode(second);
@@ -50,7 +50,7 @@ async function textLeads(page: Page, first: string, second: string): Promise<boo
 // visibility rather than the order of two.
 function glossLocator(page: Page, gloss: string): Locator {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, |· )${escaped}( ·|,|$)`));
+  return page.getByText(new RegExp(`(^|, |· )${escaped}(,|$)`));
 }
 
 // The five forms the validator measured live against the screen on

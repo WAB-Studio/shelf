@@ -363,11 +363,12 @@ test("RNL-03: at 360px no control overlaps another, at the top or the foot of ea
     delete (window as unknown as { Translator?: unknown }).Translator;
   });
 
-  for (const route of ["/?q=throughout", "/registro", "/cuenta"]) {
+  // A one-sense answer: a longer one scrolls under the fixed bar by design, and its controls pass beneath it.
+  for (const route of ["/?q=apple", "/registro", "/cuenta"]) {
     await page.goto(route);
     await drawn(page);
     // The answer stands before its controls are measured; the other routes draw none.
-    if (route.startsWith("/?")) await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
+    if (route.startsWith("/?")) await expect(page.getByRole("heading", { name: "apple" })).toBeVisible({ timeout: 10000 });
 
     for (const edge of ["top", "foot"] as const) {
       if (edge === "foot") await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));

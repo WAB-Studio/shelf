@@ -83,8 +83,9 @@ for (const width of [1280, 1600]) {
     await open(page, "/", width);
     edges.push(Math.round((await box(page).boundingBox())!.x));
     expect(new Set(edges.slice(0, 2)).size).toBe(1);
-    // The box sits a padding in from the same edge.
-    expect(Math.abs(edges[2] - edges[0])).toBeLessThan(40);
+    // Buscar's column and margin sit 56px in from the sidebar (the others 32px), and the input a search
+    // icon further in: 66px from the shared edge by design, never a different column.
+    expect(Math.abs(edges[2] - edges[0])).toBeLessThan(80);
   });
 }
 

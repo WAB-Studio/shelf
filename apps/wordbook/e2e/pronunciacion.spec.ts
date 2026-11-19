@@ -51,7 +51,7 @@ async function answer(page: Page, word: string): Promise<void> {
 // merely contains it (`pelea` inside `pelear`).
 function glossLocator(page: Page, gloss: string): Locator {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, |· )${escaped}( ·|,|$)`));
+  return page.getByText(new RegExp(`(^|, |· )${escaped}(,|$)`));
 }
 
 // RL-51, board `PalabraPronunciacionOscuroMovil`: `row` is two words wearing
@@ -152,7 +152,7 @@ test("RL-51 leaves RL-47 standing: `bed` answers as itself and `sternly` still l
   const order = await page.evaluate(() => {
     const glossNode = (gloss: string) =>
       Array.from(document.querySelectorAll("span, p")).find((node) =>
-        new RegExp(`(^|, )${gloss}(,|$)`).test(node.textContent ?? ""),
+        new RegExp(`(^|, |· )${gloss}(,|$)`).test(node.textContent ?? ""),
       );
     const first = glossNode("severo");
     const second = glossNode("popa");

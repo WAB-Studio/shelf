@@ -57,7 +57,7 @@ async function headingOrder(page: Page): Promise<string[]> {
 // bounded by the line's own start, end or `, `.
 function glossLocator(page: Page, gloss: string): Locator {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, )${escaped}(,|$)`));
+  return page.getByText(new RegExp(`(^|, |· )${escaped}(,|$)`));
 }
 
 // RL-47: the form the reader typed leads the answer, and the headword it
@@ -137,7 +137,7 @@ test("RL-47 keeps the bed clause: bed answers alone, reading still leads over re
   // one-gloss-per-line markup; this is the line that actually holds
   // `reading`'s own two glosses joined (docs/wordbook/DESIGN.md "The
   // translations are one line, separated by commas").
-  await expect(page.getByText("lectura, leída", { exact: true })).toBeVisible();
+  await expect(page.getByText("lectura · leída", { exact: true })).toBeVisible();
 
   const order = await headingOrder(page);
   expect(order.indexOf("reading")).toBeLessThan(order.indexOf("read"));

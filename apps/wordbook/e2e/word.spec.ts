@@ -61,7 +61,7 @@ const SUGGESTIONS_SETTLE_MS = 900;
 // merely contains it.
 function glossPattern(gloss: string): RegExp {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|, |· )${escaped}( ·|,|$)`);
+  return new RegExp(`(^|, |· )${escaped}(,|$)`);
 }
 
 function glossLocator(page: Page, gloss: string): Locator {
