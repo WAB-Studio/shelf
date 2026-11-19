@@ -1,7 +1,7 @@
 import { BROWSER_NAMES } from "@/lib/app-names";
 import type { AppTime, PageTime, SiteTime } from "@/lib/queries";
 
-// What an app or a site is for (RT-28, RT-31). Classes describe where the time went; none of them is better than another.
+// What an app or a site is for (RT-32). Classes describe where the time went; none of them is better than another.
 export type AppClass = "code" | "ai" | "work" | "messages" | "games" | "social" | "shopping" | "study" | "system" | "other";
 
 export const APP_CLASSES: AppClass[] = ["code", "ai", "work", "messages", "games", "social", "shopping", "study", "system", "other"];
@@ -28,7 +28,7 @@ const CLASS_OF: Record<string, AppClass> = {
   WhatsApp: "messages",
   Discord: "messages",
   Telegram: "messages",
-  VALORANT: "games",
+  Valorant: "games",
   Fortnite: "games",
   "Rocket League": "games",
   Minecraft: "games",
@@ -127,7 +127,7 @@ export function appTone(name: string, systemName: string, browserKind: AppClass 
   return BROWSER_NAMES.has(name) ? browserKind : appClass(name, systemName);
 }
 
-// A page whose title names studyAid, «… · studyAid» or just «studyAid», is study whatever its host (RT-31).
+// A page whose title names studyAid, «… · studyAid» or just «studyAid», is study whatever its host (RT-32).
 const STUDY_TITLE = /(^|·)\s*studyaid\s*$/i;
 
 // The class of one page: study when its title names studyAid, else its host's.

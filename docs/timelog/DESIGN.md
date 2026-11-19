@@ -1,12 +1,49 @@
 # TimeLog — design guide
 
-Governs `apps/timelog` alone. No pattern crosses over from HomeFund, WordBook or GoalLog because it
+Governs `apps/timelog` alone. «Menos (2026-11-19)» is the newest word on every screen; older sections carry a note of what it replaced. No pattern crosses over from HomeFund, WordBook or GoalLog because it
 exists next door.
 
 Written 2026-10-28 for P5. The user has not seen it drawn yet: the first screen built is the first
 look, and these words change with what they say.
 
+## Menos (2026-11-19)
+
+Decided by the user: «el diseño es muy malo», then «sí» to this redesign (RT-29 to RT-33). It supersedes every part of this
+guide it names below; each older section carries a note saying what it no longer says. Where this section and an older one
+disagree, this one wins. Why: a critic found that on «Hoy» a person could not tell in five seconds where the day went (the
+app list started below the first screen at 1440x900 and at 390, Claude appeared four times, the brand block was half a screen
+of nothing, the week's figures floored and did not add up).
+
+- **One column, 760 wide at most**, on every screen, under one header with the same three pills («Hoy», «Semana», «Llaves»)
+  and the language switch. No mosaic, no cards, no brand block: sections are a title in the display face (22) with a total at the
+  right, rows separated by space. Dark stays the primary face; the tokens, the type and the class colours of RT-32 stay.
+- **Top line.** «Jueves 19 nov · 5 h 12 min en la computadora» in the display face (22, 28 from 720) with the total muted, ‹
+  and › as 44 round buttons either side («Día anterior» / «Día siguiente»; «Semana anterior» / «Semana siguiente»). Where there is
+  no neighbour the place stays empty so the title never moves. Under it, small: a «Hoy» link when the day is not today,
+  «Actualizado hace…» on today, the devices when more than one uploaded. «Semana» uses the same control, with «Esta semana» in the
+  place of «Hoy».
+- **Order on «Hoy».** The one stacked bar by class with its legend as a wrapping line (name and time written, longest first),
+  Apps (eight rows and «y N apps más · X»), Sitios, Proyectos, and one Claude line that opens Claude Code's sessions. On a
+  phone the first app's bar ends near 490 of 844; on a desktop near 380 of 900.
+- **Claude is a line, not a card.** «Claude: 26 min en pantalla · Claude Code trabajó 1 h 7 min». claude.ai is a site in Sitios.
+  A Claude Code that never sent says so once, in a sentence under the line. «% del día» is gone.
+- **The ›.** It sits at the row's start, centred on the row, in a 24-wide hit area; the whole row is the target. Rows of one list
+  that do not open keep its width, so every name of a list starts in one place.
+- **«Semana».** Seven rows, each a link to its day: «Lun 16», its full figure («9 h 52 min») and a bar against the week's longest
+  day; a day not reached is dimmed and reads «—». Each day floors to whole minutes, as its own screen does, and the total is the
+  sum of those minutes: the figures always add up. Then the class bar, Apps (an app opens onto its days as small bars), Sitios,
+  Proyectos, the Claude line, and «Exportar esta semana» at the foot.
+- **«Llaves» and «Exportar» say less.** «Llaves»: the key name and «Crear llave», the new key once, the keys, one sentence on the
+  installer, then «Conectar Claude» collapsed (one sentence; the command with its «Copiar» on the same row). «Exportar»: one
+  sentence, the dates, the shortcuts, and «Qué trae el archivo» collapsed.
+- **Names.** An app reads as people say it: a `-Win64-Shipping` suffix is dropped, `VALORANT` is «Valorant», `javaw` is «Minecraft».
+
+Gone: the day line («Claude Code durante el día»), the week's heatmap and its legend, the day strip, the brand block and its
+two cards, the Claude card, the seven vertical day columns, the mosaic.
+
 ## The direction: Reloj de arena
+
+> «One bar per app… no legend» is superseded by «Menos» in one word: the class bar of the day carries a legend (name and time) because a colour is never the only word for a class.
 
 Sand that fell. The screen says how much and where, and judges nothing.
 
@@ -32,6 +69,8 @@ Sand that fell. The screen says how much and where, and judges nothing.
 
 ## Screens
 
+> Superseded by «Menos» (2026-11-19): the «Hoy», «Semana» and «Llaves» bullets below, and the nav at the foot of the phone is now the same on every screen. «A day with nothing reads —» holds for a day not reached.
+
 - **Hoy**: the date as title; the day's total under it in 22 mono; then one row per app: its name,
   its time on the right in mono, the bar under both. «Sin datos de hoy · última subida <hora>»
   when nothing arrived.
@@ -43,6 +82,8 @@ Sand that fell. The screen says how much and where, and judges nothing.
   the desktop. A day with nothing reads «—».
 
 ## Grafito y señal (2026-10-30)
+
+> Superseded by «Menos»: the brand block (graphite, radius 20, behind the total) and its tokens are no longer used on any screen; the tokens stay in `theme.css`. The palette, the contrast table, pill buttons and the type hold.
 
 Restyle by the recipe the user took from agendaamiga.com, with TimeLog's own colours: a title face
 with character, one accent, one highlight used sparingly, one dark brand block, pill buttons,
@@ -79,6 +120,8 @@ as pills); app names read without «.exe», system hosts grouped as «Sistema».
 
 ## Round 2 (2026-10-30)
 
+> Superseded by «Menos»: width (the 1200 page, the two-column grid, the sticky block), «The total is not an alarm», «Week figures» (floored, largest unit alone) and «Frente al día anterior». Held: the brand on every surface and the words of «Entrar» and of an empty day.
+
 The second critique, from the screens at 820, 1440 and 1920:
 
 - **Width.** «Hoy», a day and «Semana» open the page to 1200 (`Page wide`). From 1100 a grid
@@ -98,6 +141,8 @@ The second critique, from the screens at 820, 1440 and 1920:
 
 ## Claude and Internet (2026-10-30)
 
+> Superseded by «Menos»: the «Claude» card, its three bars, the brand block's third card and «Claude por día» on «Semana». «Internet» is «Sitios». Held: a row that opens onto its detail (windows, pages), the sessions named by project (now behind the Claude line), the privacy line, and a source that never arrived saying so in a sentence.
+
 Same system, no new element. In «Hoy» and any day the main column reads Apps, then Claude, then
 Internet; the brand block gains a third card, «Claude en total». «Claude» is a line of
 `Claude en total` and its time over up to three bars (Claude Code, claude.ai, App de Claude, the last
@@ -115,6 +160,8 @@ named by project, the span «9:12 a. m. – 10:40 a. m.» under each. The privac
 person sees it and that the exclusion list never leaves the PC.
 
 ## Round 3 (2026-10-31)
+
+> Superseded by «Menos»: P1 (the hourly line), the mosaic, the titles at the right of a card, the day line, the day strip, the «Semana» heatmap and its block, and the phone items about the stacked figures. Held: P2 (the classes and their colours, RT-32), P3 (devices, as a small line), P4 («Exportar» inside «Semana»), «One scale» (a top-level list against its longest row, a child against its parent) and «Actualizado hace…».
 
 The third critique («Creo que podemos mejorar más, ¿no?»), from `private/reportes/timelog-ronda3.md`.
 
@@ -163,6 +210,8 @@ What changed:
 
 ## Critic's pass on the deploy (2026-10-31)
 
+> Superseded by «Menos»: the day line and its colours, the heatmap's first row and legend, the block's Claude bar and «Proyectos» as a card. Held: zero is «0 min», «Hoy» is current on today alone, every «y N más» opens, every cut text carries a `title`, the CSV stops at today.
+
 - Zero is «0 min», never «< 1 min». The day strip dashes and strikes a reached day nothing arrived on. A past day with nothing
   shows its own sentence and no empty Claude and Internet cards. «Hoy» is current on today alone.
 - Day line: one colour per project (six tokens, `--tl-project-*`), the label beside a segment too short for it, the ruler on
@@ -178,6 +227,8 @@ What changed:
 
 ## Claude on screen, apart from the agent (2026-11-08)
 
+> Superseded by «Menos»: the lines in the brand block and the Claude card, and «% del día». Held: Claude on screen (claude.ai and the app) is kept apart from Claude Code, which is never added to it, and the CSV columns.
+
 Decided by the user (RT-24). «% del día» counts what was in front of the person: claude.ai and the app, «Claude en
 pantalla». Claude Code is the agent working, shown apart: a «Claude Code trabajó N por su cuenta» line in the brand block, its
 own row under «Trabajo del agente» in the Claude card, and its own CSV column beside the total and the screen column; it is never added to the percentage.
@@ -185,10 +236,14 @@ own row under «Trabajo del agente» in the Claude card, and its own CSV column 
 
 ## Semana grows (2026-11-08)
 
+> Superseded by «Menos» (RT-26 is retired): «Semana» no longer has the mosaic nor the heatmap; Sitios and Proyectos of the week are plain sections.
+
 Decided by the user (RT-26). Under the apps heatmap, «Semana» adds a mosaic of «Proyectos de la semana» and «Internet de la
 semana», the same bars and the same «y N más» as the day. On a phone a heatmap cell stacks hours over minutes («4h»/«43»).
 
 ## Conectar Claude (2026-11-08)
+
+> Superseded by «Menos» (RT-27 is retired; RT-33): «Conectar Claude» is collapsed, has one sentence and one copy row, and no address block nor «what to ask» line.
 
 Decided by the user (RT-27). In «Llaves», under the key form and before the list: a title, one sentence, two copy blocks
 (the address, the Claude Code command) and a line of what to ask. Same copy blocks as the key's; no new element.

@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { readableApps } from "@/lib/app-names";
 import type { DurationWords } from "@/lib/duration";
-import { briefDuration, durationParts, formatDuration, heatFigure } from "@/lib/duration";
+import { durationParts, formatDuration } from "@/lib/duration";
 import type { AppTime } from "@/lib/queries";
 import { weekdayIndex } from "@/lib/week";
 import { TIME_ZONE } from "@/lib/zone";
@@ -20,11 +20,6 @@ const CLOCK = {
   en: new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, hour: "numeric", minute: "2-digit" }),
 };
 
-const HOUR = {
-  es: new Intl.DateTimeFormat("es-CO", { timeZone: "UTC", hour: "numeric" }),
-  en: new Intl.DateTimeFormat("en-US", { timeZone: "UTC", hour: "numeric" }),
-};
-
 const dayOfMonth = (day: string) => Number(day.slice(8, 10));
 
 // The calendar words and the duration a screen reads, from the catalogue.
@@ -33,7 +28,6 @@ export async function calendarWords() {
   const months = common.raw("months") as string[];
   const monthsShort = common.raw("monthsShort") as string[];
   const weekdays = common.raw("weekdays") as string[];
-  const weekdaysInitial = common.raw("weekdaysInitial") as string[];
   const weekdaysShort = common.raw("weekdaysShort") as string[];
   const words: DurationWords = {
     hours: time("duration.hours"),
@@ -44,8 +38,6 @@ export async function calendarWords() {
   return {
     duration: (seconds: number) => formatDuration(seconds, words),
     durationParts: (seconds: number) => durationParts(seconds, words),
-    brief: (seconds: number) => briefDuration(seconds, words),
-    heat: (seconds: number) => heatFigure(seconds, words, { hours: time("duration.tinyHours"), minutes: time("duration.tinyMinutes") }),
     // The day's apps under their readable names, system noise as «Sistema».
     apps: (apps: AppTime[]) => readableApps(apps, time("system")),
     system: time("system"),
@@ -58,7 +50,6 @@ export async function calendarWords() {
       return time("duration.ago.days", { n: Math.floor(minutes / 1440) });
     },
     weekday: (day: string) => weekdays[weekdayIndex(day)],
-    weekdayInitial: (day: string) => weekdaysInitial[weekdayIndex(day)],
     weekdayShort: (day: string) => weekdaysShort[weekdayIndex(day)],
     month: (day: string) => months[Number(day.slice(5, 7)) - 1],
     dayOfMonth,
@@ -66,8 +57,6 @@ export async function calendarWords() {
     dayShort: (day: string) => common("dayShort", { day: dayOfMonth(day), month: monthsShort[Number(day.slice(5, 7)) - 1] }),
     // «9:14 p. m.» on Bogotá's clock.
     clock: (at: Date) => CLOCK[locale === "en" ? "en" : "es"].format(at),
-    // «3 p. m.», the ruler's hour on the same 12-hour clock as the spans; 24 is midnight.
-    hour: (hour: number) => HOUR[locale === "en" ? "en" : "es"].format(new Date(Date.UTC(2000, 0, 1, hour % 24))),
     // «28 oct, 9:14 p. m.» on Bogotá's clock.
     moment: (at: Date) => MOMENT[locale === "en" ? "en" : "es"].format(at),
   };

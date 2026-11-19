@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BROWSER_NAMES, isBrowser, readableApp, readableApps } from "./app-names";
+import { BROWSER_NAMES, displayApp, isBrowser, readableApp, readableApps } from "./app-names";
 
 test("an app drops its extension and well-known ones read as people say them", () => {
   assert.equal(readableApp("Code.exe"), "VS Code");
@@ -64,4 +64,12 @@ test("one list of browsers names them and spots them whatever the spelling (RT-1
   for (const raw of ["chrome.exe", "Vivaldi.EXE", "opera", "arc.exe", " msedge.exe "]) assert.equal(isBrowser(raw), true, raw);
   for (const raw of ["Code.exe", "tor.exe", "zen.exe", "chromeless.exe"]) assert.equal(isBrowser(raw), false, raw);
   for (const raw of ["vivaldi.exe", "opera.exe", "arc.exe", "edge"]) assert.equal(BROWSER_NAMES.has(readableApp(raw) ?? ""), raw !== "edge", raw);
+});
+
+test("a shipping build of a known game reads as the game; an unknown one is hidden only on screen", () => {
+  assert.equal(readableApp("VALORANT-Win64-Shipping.exe"), "Valorant");
+  assert.equal(readableApp("VALORANT.exe"), "Valorant");
+  assert.equal(readableApp("Foo-Win64-Shipping.exe"), "Foo-Win64-Shipping");
+  assert.equal(displayApp("Foo-Win64-Shipping"), "Foo");
+  assert.equal(displayApp("VS Code"), "VS Code");
 });
