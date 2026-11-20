@@ -31,6 +31,9 @@ async function lookUp(page: Page, words: string[]): Promise<void> {
   for (const word of words) {
     await box(page).fill(word);
     await expect(page.getByRole("heading", { name: word })).toBeVisible();
+    // The heading paints before the screen hands the answer to the record; emptying the box in that
+    // gap loses the lookup, so the box stays quiet past the record's settle first.
+    await page.waitForTimeout(1000);
     await box(page).fill("");
   }
 }
