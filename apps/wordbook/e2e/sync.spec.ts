@@ -214,7 +214,7 @@ test("RNL-09: with no account, ten keystrokes and a hidden tab issue nothing to 
   await page.goto("/");
   await assetResponse;
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.pressSequentially("throughout", { delay: 40 });
   // The keystrokes committed: the answer is drawn.
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible();
@@ -239,7 +239,7 @@ test("RL-14: the word-path guard holds with the sync driver mounted in the layou
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const tenKeystrokes = "accountant";
 
   // A warm-up run first, autocomplete included, so every font any state
@@ -329,7 +329,7 @@ test("RL-24: the copy fires on hide, never on a keystroke, and the request lands
   });
 
   await freezeTimers(page);
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.pressSequentially("throughout", { delay: 40 });
   expect(syncRequests, `while visible: ${JSON.stringify(syncRequests)}`).toHaveLength(0);
 
@@ -410,7 +410,7 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
     // Seeded from `/`: `/cuenta` and `/registro` both read `sync` on mount and
     // would race this write.
     await page.goto("/");
-    await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
 
     await seedLocalDatabase(page, {
       sync: {

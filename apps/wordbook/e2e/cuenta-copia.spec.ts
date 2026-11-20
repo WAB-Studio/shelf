@@ -184,7 +184,7 @@ function localRow(text: string, extra: Partial<SeedLookup> = {}): SeedLookup {
 // write and put a fresh copy over the seeded one.
 async function seedLocal(page: Page, rows: { sync?: SyncState; lookups?: SeedLookup[] }): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {
@@ -726,7 +726,7 @@ test.describe("the last-copy line keeps time", () => {
       const live = () => page.evaluate(() => (window as unknown as { __liveIntervals: () => number }).__liveIntervals());
 
       await page.goto("/");
-      await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
       const baseline = await live();
 
       const nav = page.getByRole("navigation", { name: messages.nav.label });
@@ -735,7 +735,7 @@ test.describe("the last-copy line keeps time", () => {
       expect(await live(), "an interval stands while /cuenta is open").toBeGreaterThan(baseline);
 
       await nav.getByRole("link", { name: messages.nav.search }).click();
-      await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
       await expect.poll(live).toBe(baseline);
     });
   });
@@ -881,7 +881,7 @@ test("RL-52: another reader on this device confirms under a new deviceId and upl
     const asset = page.waitForResponse((r) => r.url().includes(manifest.asset.path) && r.ok());
     await page.goto("/");
     await asset;
-    await page.getByRole("textbox", { name: messages.search.label }).fill("apple");
+    await page.getByRole("combobox", { name: messages.search.label }).fill("apple");
     // The row is buffered when the answer lands; hiding before that flushes nothing.
     await expect(page.getByRole("heading", { name: "apple", exact: true })).toBeVisible();
     const next = page.waitForRequest((r) => r.url().includes("/api/log/sync"));

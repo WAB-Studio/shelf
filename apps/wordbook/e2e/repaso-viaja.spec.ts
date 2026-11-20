@@ -11,7 +11,7 @@ import messages from "../messages/es.json";
 import type { LogExport } from "../lib/log/export";
 import { DATABASE_VERSION } from "../lib/log/record";
 import { LOOKUP_SCHEMA, type LookupRecord, type SyncState } from "../lib/log/types";
-import { confirmCopy, expect, test } from "./fixtures";
+import { askToClear, confirmCopy, expect, openDownloads, test } from "./fixtures";
 
 // RL-93, RL-94, RL-95: the review travels with the account. The device's half is driven with the route's answers
 // written here; the whole loop, once, against a real reader and two browser contexts. Never types an address into
@@ -68,7 +68,7 @@ function copyOn(): SyncState {
 // Seeded from `/`: `/registro` fires a round on open that would race this write.
 async function seed(page: Page, rows: { sync?: SyncState; lookups: SeedLookup[] }): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {
@@ -228,7 +228,8 @@ test("RL-95: the export carries the review's cards and senses, under exportSchem
   await page.goto("/registro");
 
   const downloading = page.waitForEvent("download");
-  await page.getByRole("button", { name: messages.log.study.download }).click();
+  await openDownloads(page);
+  await page.getByRole("menuitem", { name: messages.log.study.download, exact: true }).click();
   const download = await downloading;
   const file = await download.path();
   if (!file) throw new Error("no download path");
@@ -249,7 +250,7 @@ test("RL-94: with no account, /cuenta and the confirmation before «Vaciar» say
   await expect(page.getByText(messages.account.copy.noSessionReview)).toBeVisible();
 
   await page.goto("/registro");
-  await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+  await askToClear(page);
   await expect(page.getByText(messages.log.clear.reviewLocal)).toBeVisible();
   await expect(page.getByText(messages.log.clear.reviewAccount)).toHaveCount(0);
 });
@@ -332,7 +333,7 @@ test("RL-93, RL-94: a card reviewed on one device is in the account and comes do
       .toEqual(["frisk"]);
 
     // The confirmation before «Vaciar» names the account as well.
-    await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+    await askToClear(page);
     await expect(page.getByText(messages.log.clear.reviewAccount)).toBeVisible();
 
     // The reader's other device: a browser with nothing, signed in as the same reader.

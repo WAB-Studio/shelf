@@ -1,4 +1,4 @@
-// RL-66 (device half), RL-70: a sync round sends this reader's queued marks and
+// RL-99 (device half), RL-70: a sync round sends this reader's queued marks and
 // the mark cursor, applies the marks the account answers with, and only then
 // settles the queue and the cursor. Written from the contract, with
 // `../log/record`, `../log/merge`, `../log/delete` and `fetch` replaced by

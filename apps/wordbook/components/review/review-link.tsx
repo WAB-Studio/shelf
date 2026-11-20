@@ -1,35 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
-import { contentUnit } from "@/lib/log/outcome";
-import { readWordStudy } from "@/lib/log/summary";
-import { isReviewable } from "@/lib/review/deck";
+import { useDueToday } from "@/lib/review/use-due-today";
 import { Button } from "@/components/ui";
 
-// The way into the review, named for what it will ask: words, phrases, or entries once both are
-// among the reviewable rows. Plain «Repasar» until the record is read.
+// The way into the review, named for how many entries wait today. Draws nothing until the record is
+// read, and nothing when none is due: a button that opens an empty session is not a way in.
 export function ReviewLink() {
   const t = useTranslations("review");
-  const [unit, setUnit] = useState<"words" | "phrases" | "entries" | null>(null);
+  const due = useDueToday();
 
-  useEffect(() => {
-    let live = true;
-    readWordStudy()
-      .then(({ rows }) => {
-        if (live) setUnit(contentUnit(rows.filter(isReviewable)));
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
+  if (due === null || due.due === 0) return null;
 
   return (
-    <Button asChild size="3" variant="soft">
-      <NextLink href="/repaso" prefetch={false}>{unit === null ? t("open") : t("openKind", { kind: unit })}</NextLink>
+    <Button asChild size="3">
+      <NextLink href="/repaso" prefetch={false}>{t("openCount", { count: due.due })}</NextLink>
     </Button>
   );
 }

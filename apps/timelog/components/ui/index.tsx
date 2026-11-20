@@ -16,14 +16,53 @@ export function Page({ shell, header, children }: { shell?: boolean; header: Rea
   );
 }
 
-// The two columns of a desktop screen: `main` the wide one (the apps), `aside` the narrow one (sites, projects, Claude).
-// Under 1100 they stack, `main` first.
-export function Columns({ main, aside }: { main: ReactNode; aside: ReactNode }) {
+// The columns of a desktop screen: `main` the wide one (the apps), `middle` (the classes) and `aside` (sites, projects,
+// Claude) beside it. Under 1100 they stack in that order.
+export function Columns({ main, middle, aside }: { main: ReactNode; middle?: ReactNode; aside: ReactNode }) {
   return (
-    <div className={styles.columns}>
+    <div className={join(styles.columns, middle !== undefined && styles.columns3)}>
       <Stack gap={4}>{main}</Stack>
+      {middle === undefined ? null : <Stack gap={4}>{middle}</Stack>}
       <Stack gap={4}>{aside}</Stack>
     </div>
+  );
+}
+
+// The figures a screen opens with, side by side: four on the desktop, two a row on the phone.
+export function Stats({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section aria-label={label} className={styles.stats}>
+      {children}
+    </section>
+  );
+}
+
+// One figure: what it is, the figure large (in its class's colour when `tone` names one), a line under it.
+export function Stat({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: Tone }) {
+  return (
+    <div className={join(styles.stat, tone && styles[`tone_${tone}`], tone && styles.statTone)}>
+      <span className={styles.meta}>{label}</span>
+      <span className={styles.statValue}>{value}</span>
+      {note === undefined ? null : <span className={styles.meta}>{note}</span>}
+    </div>
+  );
+}
+
+export type ClassRow = { key: string; tone: Tone; name: string; share: string; figure: string };
+
+// Each class on its own line: its colour, its name, its share of the whole and its time, so no class is told by colour alone.
+export function ClassRows({ rows }: { rows: ClassRow[] }) {
+  return (
+    <ul className={styles.classRows}>
+      {rows.map((row) => (
+        <li key={row.key} className={styles[`tone_${row.tone}`]}>
+          <span className={styles.swatch} aria-hidden="true" />
+          <Text truncate>{row.name}</Text>
+          <span className={styles.meta}>{row.share}</span>
+          <Text mono>{row.figure}</Text>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -52,19 +91,15 @@ function PeriodStep({ step, glyph }: { step?: Step; glyph: string }) {
   return step === undefined ? <span className={styles.periodSpacer} aria-hidden="true" /> : <Link href={step.href} className={styles.periodStep} aria-label={step.label}>{glyph}</Link>;
 }
 
-// The top line of a day or a week: its name and what it adds up to (beside it on the phone, under it on the desktop), with
-// ‹ and › one period away.
+// The top line of a day or a week: its name with ‹ and › one period away; its total is the first figure under it.
 // Both arrows are buttons with a name; where a period has no neighbour its place stays empty so the title never moves.
-// `children` is the small line under the title («Actualizado hace…», the way back to now).
-export function Period({ title, summary, prev, next, children }: { title: string; summary?: string; prev?: Step; next?: Step; children?: ReactNode }) {
+// `children` is the small line beside it («Actualizado hace…», the way back to now).
+export function Period({ title, prev, next, children }: { title: string; prev?: Step; next?: Step; children?: ReactNode }) {
   return (
     <header className={styles.period}>
       <div className={styles.periodRow}>
         <PeriodStep step={prev} glyph="‹" />
-        <h1 className={styles.periodTitle}>
-          {title}
-          {summary === undefined ? null : <span className={styles.periodSummary}>{summary}</span>}
-        </h1>
+        <h1 className={styles.periodTitle}>{title}</h1>
         <PeriodStep step={next} glyph="›" />
       </div>
       {children === undefined ? null : <div className={styles.periodMeta}>{children}</div>}
@@ -137,28 +172,16 @@ export function Text({ variant = "row", mono, truncate, wrap, untitled, as = "sp
   return <Tag title={title} className={join(styles[variant], mono && styles.mono, !mono && styles.name, truncate && styles.truncate, wrap && styles.clamp)}>{children}</Tag>;
 }
 
-export type CompositionPart = { key: string; tone: Tone; seconds: number; name: string; figure: string };
+export type CompositionPart = { key: string; tone: Tone; seconds: number };
 
-// A whole in parts: one stacked bar and, under it, each part's name and figure in words, so no
-// part is told by colour alone.
+// A whole in parts: one stacked bar. Its parts are written in words beside it (ClassRows), never by colour alone.
 export function Composition({ parts, label }: { parts: CompositionPart[]; label: string }) {
   const total = Math.max(1, parts.reduce((sum, part) => sum + part.seconds, 0));
   return (
-    <div className={styles.composition}>
-      <div className={styles.stacked} role="img" aria-label={label}>
-        {parts.map((part) => (
-          <div key={part.key} className={join(styles.part, styles[`tone_${part.tone}`])} style={{ flexGrow: part.seconds / total }} />
-        ))}
-      </div>
-      <ul className={styles.legend}>
-        {parts.map((part) => (
-          <li key={part.key} className={styles[`tone_${part.tone}`]}>
-            <span className={styles.swatch} aria-hidden="true" />
-            <Text>{part.name}</Text>
-            <Text mono>{part.figure}</Text>
-          </li>
-        ))}
-      </ul>
+    <div className={styles.stacked} role="img" aria-label={label}>
+      {parts.map((part) => (
+        <div key={part.key} className={join(styles.part, styles[`tone_${part.tone}`])} style={{ flexGrow: part.seconds / total }} />
+      ))}
     </div>
   );
 }

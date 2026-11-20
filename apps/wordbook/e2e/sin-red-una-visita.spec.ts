@@ -82,12 +82,12 @@ async function dictionaryInstalled(page: Page): Promise<boolean> {
 
 // «apple» answers as one comma-joined translation line.
 function appleTranslation(page: Page) {
-  return page.getByText("manzana, poma", { exact: true });
+  return page.getByText("manzana · poma", { exact: true });
 }
 
 async function lookUpApple(page: Page) {
   await page
-    .getByRole("textbox", { name: messages.search.label })
+    .getByRole("combobox", { name: messages.search.label })
     .fill("apple");
   await expect(appleTranslation(page)).toBeVisible();
 }
@@ -149,7 +149,7 @@ for (const { name, viewport } of WIDTHS) {
 
         const offline = await openOffline(context);
         await offline
-          .getByRole("textbox", { name: messages.search.label })
+          .getByRole("combobox", { name: messages.search.label })
           .fill("apple");
         await expect(
           offline.getByText(messages.install.failed, { exact: true }),
@@ -169,7 +169,7 @@ for (const { name, viewport } of WIDTHS) {
       );
       await page.goto("/");
       await page
-        .getByRole("textbox", { name: messages.search.label })
+        .getByRole("combobox", { name: messages.search.label })
         .fill("apple");
 
       await expect(

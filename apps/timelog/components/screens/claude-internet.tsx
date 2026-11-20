@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { BarRows, capped, type BarRow } from "@/components/screens/app-rows";
 import { Disclosure, Section, Text, TextLink } from "@/components/ui";
+import { siteClass } from "@/lib/app-classes";
 import { projectName } from "@/lib/claude-project";
 import { INSTALLER_URL } from "@/lib/installer";
 import { sum } from "@/lib/totals";
@@ -52,7 +53,7 @@ export async function ProjectBars({ projects, words }: { projects: ProjectTime[]
 // The longest hostnames as bars (RT-13), «y N más · X» opening onto the rest; `detail` opens a site onto what it holds.
 export async function SiteBars({ sites, words, detail }: { sites: SiteTime[]; words: Words; detail?: (host: string) => ReactNode }) {
   const t = await getTranslations("time.internet");
-  const row = (one: SiteTime): BarRow => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: detail?.(one.host) });
+  const row = (one: SiteTime): BarRow => ({ key: one.host, name: one.host, tone: siteClass(one.host), figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: detail?.(one.host) });
   return <BarRows aligned of={sites[0]?.seconds} {...capped(sites, ROWS_SHOWN, row, (rest) => t("more", { n: rest.length, duration: words.duration(sum(rest)) }))} />;
 }
 

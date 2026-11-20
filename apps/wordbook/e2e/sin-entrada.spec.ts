@@ -69,7 +69,7 @@ test("a two-token miss draws both headwords, offline, with no request", async ({
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("hello world");
 
   await expect(mainHeadings(page).filter({ hasText: "hello" })).toBeVisible();
@@ -103,7 +103,7 @@ test("a two-token miss where the dictionary lacks one word draws that word's own
   await openReady(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("hello zzqx");
   await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
   await expect.poll(() => translateCount, "the translation is attempted once, and fails").toBe(1);
@@ -128,7 +128,7 @@ test("a 61-token string draws one line and no heading, and asks the dictionary n
   page.on("request", (request) => requestUrls.push(request.url()));
 
   const tooLongText = Array.from({ length: 61 }, (_, index) => `palabra${index}`).join(" ");
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(tooLongText);
 
   const expectedTooLong = messages.search.noEntry.tooLong.replace("{count}", "61");
@@ -157,7 +157,7 @@ test("the cat sits still debounces to exactly one translate request, 600ms after
   await openReady(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("the cat sits");
 
   await page.clock.runFor(PHRASE_DEBOUNCE_MS - 100);
@@ -201,7 +201,7 @@ test("a phrase whose translation fails falls to the per-word breakdown, capped a
   page.on("request", (request) => requestUrls.push(request.url()));
 
   const phraseText = "dog cat zzqx bird fish mouse horse cow pig";
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(phraseText);
 
   // The debounce, the failed request, and the on-device breakdown all have
@@ -264,7 +264,7 @@ test("a two-token string reaches the translator, and falls back to the breakdown
   await openReady(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("dog cat");
   await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
   await expect.poll(() => translateCount, "a two-token string reaches the translate route exactly once").toBe(1);
@@ -287,7 +287,7 @@ test("a one-token miss never reaches the translator", async ({ page }) => {
   await openReady(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("zzzqqq");
 
   await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
@@ -308,7 +308,7 @@ test("every block and the trailing line lead back to /?q=<word>, and that screen
   await openReady(page);
 
   const phraseText = "she kept her fettle through the long and bitter winter";
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(phraseText);
 
   const expectedTitle = messages.search.noEntry.titleTranslationFailed.replace("{query}", phraseText);
@@ -388,7 +388,7 @@ async function top(page: Page, locator: ReturnType<Page["getByText"]>): Promise<
 }
 
 async function breakdown(page: Page, query: string): Promise<void> {
-  await page.getByRole("textbox", { name: messages.search.label }).fill(query);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(query);
   await expect(page.getByText(messages.search.noEntry.titleTranslationFailed.replace("{query}", query))).toBeVisible();
 }
 
@@ -516,7 +516,7 @@ test("offline, the breakdown still leads with the table translation and asks for
 
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
-  await page.getByRole("textbox", { name: messages.search.label }).fill("something weird happened");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("something weird happened");
   await page.clock.runFor(PHRASE_DEBOUNCE_MS + 600);
   await expect.poll(async () => (await blockLines(page, "something", "weird")).length).toBeGreaterThan(0);
 
@@ -531,7 +531,7 @@ test("past sixty words of function words, the line stands alone with no block an
   await failTranslation(page);
   await openReady(page);
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill(Array.from({ length: 61 }, () => "something").join(" "));
+  await page.getByRole("combobox", { name: messages.search.label }).fill(Array.from({ length: 61 }, () => "something").join(" "));
   await expect(page.getByText(messages.search.noEntry.tooLong.replace("{count}", "61"))).toBeVisible();
   await expect(mainHeadings(page)).toHaveCount(0);
   await expect(page.getByText(functionWordTranslation("something") as string, { exact: true })).toHaveCount(0);
@@ -663,7 +663,7 @@ test("offline, a sentence still answers from the device: the lemma block under l
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
 
-  await page.getByRole("textbox", { name: messages.search.label }).fill("I left it there");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("I left it there");
   await expect(visible(page, formLine("viaInflectionWithEntry", "left", "leave"))).toHaveCount(1);
   const lines = (await blockLines(page, "left", "it")).map((l) => l.text);
   expect(lines.indexOf("sobras, sobrado")).toBeLessThan(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave")));

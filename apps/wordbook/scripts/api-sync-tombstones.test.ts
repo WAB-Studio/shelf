@@ -1,4 +1,4 @@
-// A sync round that names searches to delete (RL-66, RL-70) costs the same three
+// A sync round that names searches to delete (RL-99, RL-70) costs the same three
 // statements as one that does not (the gate, the write, the download), answers both new fields on every 200, and
 // hands the named marks and the mark cursor to the statement that owns them.
 // The session is a stand-in whose transaction counts `execute` calls; the real

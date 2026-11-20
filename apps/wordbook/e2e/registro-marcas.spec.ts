@@ -7,7 +7,7 @@ import { DATABASE_VERSION } from "../lib/log/record";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { expect, studyHeader, test } from "./fixtures";
 
-// RL-70, RL-66 (device half): a search another device deleted leaves this one
+// RL-70, RL-99 (device half): a search another device deleted leaves this one
 // when /registro opens with the copy on, the rows it held and the count above
 // them with it, and the list repaints without a reload when the round brought
 // marks and no row. Every answer of the route is the test's own: no session,
@@ -59,7 +59,7 @@ async function deleteTranslator(page: Page): Promise<void> {
 // race this write. Own rows take ids 1 and 3; the pulled one takes 2.
 async function seed(page: Page): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   const lookups = [
     row("alpha"), // id 1, this device's own
     row("zebra", { device: FOREIGN, deviceSeq: 7 }), // id 2, pulled

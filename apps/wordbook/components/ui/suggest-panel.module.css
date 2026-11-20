@@ -1,0 +1,77 @@
+.anchor {
+  position: relative;
+  min-width: 0;
+}
+
+/* Raised, bordered, 18px radius, a soft shadow; 8px under the field. */
+.panel {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + 8px);
+  z-index: 3;
+  overflow: hidden;
+  background: var(--rl-raised);
+  border: 1px solid var(--rl-border);
+  border-radius: 18px;
+  box-shadow: var(--rl-shadow-float);
+}
+
+.rows {
+  padding: 6px 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: baseline;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 12px 20px;
+  cursor: pointer;
+}
+
+.row:hover,
+.active {
+  background: var(--rl-sidebar);
+}
+
+.text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.word {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.gloss {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--rl-muted);
+}
+
+.note {
+  font-size: 13px;
+  color: var(--rl-muted-quiet);
+  white-space: nowrap;
+}
+
+.foot {
+  display: none;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--rl-line);
+  font-size: 13px;
+  color: var(--rl-muted-quiet);
+}
+
+/* A phone has no arrow keys to name: the foot shows from the reading measure up. */
+@media (min-width: 660px) {
+  .foot {
+    display: flex;
+  }
+}

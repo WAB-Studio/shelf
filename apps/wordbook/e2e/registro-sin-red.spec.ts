@@ -156,7 +156,7 @@ for (const viewport of [
     async function recordThree(page: Page): Promise<void> {
       await page.goto("/");
       await controlled(page);
-      const box = page.getByRole("textbox", { name: messages.search.label });
+      const box = page.getByRole("combobox", { name: messages.search.label });
       await expect(page.getByText(messages.install.unknownSize)).toHaveCount(0);
       await expect(page.getByText(messages.install.failed)).toHaveCount(0);
       for (const word of WORDS) {
@@ -180,8 +180,8 @@ for (const viewport of [
       await expect(rowLinks(page)).toHaveCount(WORDS.length);
       const found: Array<{ word: string; href: string }> = [];
       for (const word of WORDS) {
-        // The saved translation sits beside the link inside the row's card, not inside the link.
-        const row = page.locator("section").filter({ hasText: MARK(word) }).locator('a[href^="/registro/"]');
+        // The saved translation sits beside the link inside the row, not inside the link.
+        const row = page.getByRole("row").filter({ hasText: MARK(word) }).locator('a[href^="/registro/"]');
         await expect(row).toHaveCount(1);
         found.push({ word, href: (await row.getAttribute("href"))! });
       }

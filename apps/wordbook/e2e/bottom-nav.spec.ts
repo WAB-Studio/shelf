@@ -121,7 +121,7 @@ test("Buscar carries the query past a trip through Registro, unretyped", async (
 
   await nav().getByRole("link", { name: messages.nav.search }).click();
   await expect(page).toHaveURL(/\?q=book$/);
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toHaveValue("book");
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toHaveValue("book");
 });
 
 test("all three routes still draw the bar at 360px, with no horizontal overflow", async ({ page }) => {
@@ -177,7 +177,7 @@ test("returning through the bar does not record the restored query again", async
   await assetResponse;
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
-  await page.getByRole("textbox", { name: messages.search.label }).fill("manures");
+  await page.getByRole("combobox", { name: messages.search.label }).fill("manures");
   await expect(page).toHaveURL(/q=manures/);
 
   const nav = () => page.getByRole("navigation", { name: messages.nav.label });
@@ -363,11 +363,12 @@ test("RNL-03: at 360px no control overlaps another, at the top or the foot of ea
     delete (window as unknown as { Translator?: unknown }).Translator;
   });
 
-  for (const route of ["/?q=throughout", "/registro", "/cuenta"]) {
+  // A one-sense answer: a longer one scrolls under the fixed bar by design, and its controls pass beneath it.
+  for (const route of ["/?q=apple", "/registro", "/cuenta"]) {
     await page.goto(route);
     await drawn(page);
     // The answer stands before its controls are measured; the other routes draw none.
-    if (route.startsWith("/?")) await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
+    if (route.startsWith("/?")) await expect(page.getByRole("heading", { name: "apple" })).toBeVisible({ timeout: 10000 });
 
     for (const edge of ["top", "foot"] as const) {
       if (edge === "foot") await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));

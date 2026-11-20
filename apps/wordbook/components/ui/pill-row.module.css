@@ -1,0 +1,18 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 4px 4px 4px 20px;
+  border: 1px solid var(--rl-line);
+  border-radius: 999px;
+  background: var(--rl-raised);
+}
+
+.text {
+  min-width: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}

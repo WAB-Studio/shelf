@@ -38,7 +38,7 @@ async function blockHeads(page: Page): Promise<string[]> {
 }
 
 async function answer(page: Page, word: string): Promise<void> {
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(word);
   await expect(page.getByRole("heading", { name: word, exact: true })).toBeVisible({ timeout: 5000 });
   await openRareSenses(page);
@@ -51,7 +51,7 @@ async function answer(page: Page, word: string): Promise<void> {
 // merely contains it (`pelea` inside `pelear`).
 function glossLocator(page: Page, gloss: string): Locator {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, )${escaped}(,|$)`));
+  return page.getByText(new RegExp(`(^|, |· )${escaped}(,|$)`));
 }
 
 // RL-51, board `PalabraPronunciacionOscuroMovil`: `row` is two words wearing
@@ -90,17 +90,17 @@ test("RL-51: `row` answers as two pronunciation blocks, /rɑː/ first, its fight
 // gloss to a line. `glossLocator`'s presence check above would pass just as
 // well against the old one-per-line markup; this is the assertion that
 // actually distinguishes the two.
-test("`row` draws each sense's translations on one comma-separated line", async ({ page }) => {
+test("`row` draws each sense's translations on one line: the main gloss, then the others", async ({ page }) => {
   await deleteTranslator(page);
   await loadDictionary(page);
   await answer(page, "row");
 
   for (const line of [
-    "remo, remado",
-    "fila, hilera, renglón",
-    "pelea, riña, barullo",
-    "remar, bogar, proejar",
-    "pelear, discutir, reñir",
+    "remo · remado",
+    "fila · hilera, renglón, línea",
+    "pelea · riña, barullo, cisco",
+    "remar · bogar, proejar",
+    "pelear · discutir, reñir",
   ]) {
     await expect(page.getByText(line, { exact: true })).toBeVisible();
   }
@@ -152,7 +152,7 @@ test("RL-51 leaves RL-47 standing: `bed` answers as itself and `sternly` still l
   const order = await page.evaluate(() => {
     const glossNode = (gloss: string) =>
       Array.from(document.querySelectorAll("span, p")).find((node) =>
-        new RegExp(`(^|, )${gloss}(,|$)`).test(node.textContent ?? ""),
+        new RegExp(`(^|, |· )${gloss}(,|$)`).test(node.textContent ?? ""),
       );
     const first = glossNode("severo");
     const second = glossNode("popa");
@@ -232,7 +232,7 @@ test("RL-51: the no-entry breakdown never groups — `row` inside a phrase draws
   });
   await loadDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("row zzqx");
   await expect(page.getByRole("heading", { name: "row", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.search.noEntry.wordMiss)).toBeVisible();

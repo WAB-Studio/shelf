@@ -131,6 +131,13 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   the class bar; «Exportar esta semana» closes the narrow column. «Llaves» and «Exportar» keep a 760 column at the left. Under
   1100 the screens are RT-29, RT-30 and RT-33 as written, the columns stacked Apps first. Overrides the one column of RT-29 and
   RT-30 from 1100. (2026-11-19, «no me importa mobile, debemos hacer un buen diseño para desktop y luego adaptamos mobile»)
+- [ ] **RT-35** «Hoy», a day and «Semana» open on four figures side by side (two a row on the phone): «En la computadora»
+  (the total and «en N apps»), «Clase principal» (its name in its colour, its time and share), «App que más usaste» and «Claude
+  Code» (the agent's time and «N de Claude en pantalla»; «—» and «Sin datos de Claude» when neither arrived). Then the class bar,
+  with no legend: «Por clase» writes every class with its share and time. From 1100 three columns: Apps («N apps» at its right),
+  «Por clase», then Sitios, Proyectos and Claude; under 1100 they stack in that order. The top line holds ‹ title › and
+  «Actualizado hace…»; the total is no longer written beside the title. Durations are set in the sans with tabular figures; a
+  site's bar takes its site's class colour. Extends RT-34. (2026-11-19, variant «A · Tablero»: «A es el mejor»)
 
 ### Non-functional requirements
 

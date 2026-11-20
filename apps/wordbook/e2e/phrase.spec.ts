@@ -90,7 +90,7 @@ test("a translator that can be installed answers over the network until a person
   const translated = await stubTranslateRoute(page, "Traducción por red");
   await waitForDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("I left my house yesterday");
   await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible({ timeout: 5000 });
   expect(translated.count(), "downloadable, not available, so the first sentence still goes over the network (RL-11)").toBe(1);
@@ -135,7 +135,7 @@ test("a stale phrase response never lands once the query has moved on (RNL-05, r
   await waitForDictionary(page);
   await freezeTimers(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   await searchBox.fill(staleText);
   // Past the debounce: the slow request is genuinely in flight now, not
@@ -192,7 +192,7 @@ test("editing the box stops drawing the previous sentence's translation at once 
   });
   await waitForDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(firstText);
   await expect(page.getByText(firstAnswer)).toBeVisible();
 
@@ -223,7 +223,7 @@ test("a translated sentence deleted from and typed back keeps its translation wi
   const translated = await stubTranslateRoute(page, answer);
   await waitForDictionary(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill(text);
   await expect(page.getByText(answer)).toBeVisible();
   expect(translated.count()).toBe(1);

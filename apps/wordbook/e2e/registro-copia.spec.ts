@@ -57,7 +57,7 @@ function copyOn(extra: Partial<SyncState> = {}): SyncState {
 // the default back over the seeded copy.
 async function seed(page: Page, rows: { sync?: SyncState; lookups?: SeedLookup[] }): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {
@@ -256,7 +256,7 @@ test("RNL-09: one round per open: each visit sends one, re-rendering the screen 
   // filter field also reads «Buscar», so the field alone cannot say we left.
   await nav.getByRole("link", { name: messages.nav.search }).click();
   await expect(page).toHaveURL((url) => url.pathname === "/");
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: messages.search.label })).toBeVisible();
   await afterFrames(page);
   expect(posts.count(), "the home screen must not sync").toBe(1);
 

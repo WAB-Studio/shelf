@@ -100,7 +100,7 @@ test("three lukewarm and a Word fold into two rows, lukewarm first, Word never i
   ]);
   await page.reload();
 
-  const rows = page.locator('a[href^="/registro/"]');
+  const rows = page.getByRole("row").filter({ has: page.locator('a[href^="/registro/"]') });
   await expect(rows).toHaveCount(2);
 
   const texts = await rows.allInnerTexts();
@@ -164,7 +164,7 @@ function formsOf(line: string): string[] {
 
 async function rowText(page: Page, href: string): Promise<string> {
   // A row is a card: the link holds the word and its count, the translations and forms sit beside it.
-  return page.locator(`a[href="${href}"]`).locator("xpath=ancestor::section[1]").innerText();
+  return page.locator(`a[href="${href}"]`).locator("xpath=ancestor::*[@role='row'][1]").innerText();
 }
 
 test("a lemma and its inflected forms are one row: both forms under it, the count of all of them", async ({ page }) => {
@@ -255,8 +255,8 @@ test("a miss and a phrase each keep their own row, beside a lemma's", async ({ p
   await page.reload();
 
   await expect(page.locator('a[href^="/registro/"]')).toHaveCount(3);
-  // A row is a card: its translation sits beside the link.
-  const rows = await page.locator("section").filter({ has: page.locator('a[href^="/registro/"]') }).allInnerTexts();
+  // A row holds the link, and beside it the translation and the count.
+  const rows = await page.getByRole("row").filter({ has: page.locator('a[href^="/registro/"]') }).allInnerTexts();
   const miss = rows.find((t) => t.includes("asdkjh"));
   expect(miss).toMatch(/\b1\b/);
   const phraseRow = rows.find((t) => t.includes(phrase));
@@ -276,7 +276,7 @@ test("a search with no result says «sin resultado» in its own row", async ({ p
   await page.reload();
 
   await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
-  expect(await page.locator("section").filter({ has: page.locator('a[href^="/registro/"]') }).innerText()).toContain(
+  expect(await page.getByRole("row").filter({ has: page.locator('a[href^="/registro/"]') }).innerText()).toContain(
     "sin resultado",
   );
 });

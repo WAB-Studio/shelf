@@ -5,11 +5,14 @@ import { useTranslations } from "next-intl";
 
 import { countKind } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
-import { clearLocalLookups, countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
-import { LOG_DELETED_EVENT } from "@/lib/log/delete";
-import { SYNC_LANDED_EVENT, SYNC_LOCK } from "@/lib/sync/driver";
+import { clearLocalLookups, countRecords } from "@/lib/log/record";
+import { onRecordChanged } from "@/lib/log/record-changed";
+import { SYNC_LOCK } from "@/lib/sync/driver";
 import { clearAccountLookups } from "@/lib/sync/clear";
 import { Button, Flex, Link, Separator, TapTarget, Text } from "@/components/ui";
+
+// Fired by the download menu's «Vaciar el registro»: the question opens here, under the header.
+export const CLEAR_ASKED_EVENT = "wordbook:log-clear-asked";
 
 type CountState = { kind: "loading" } | { kind: "ready"; words: number; lookups: number; entries: "entries" | "words" } | { kind: "failed" };
 
@@ -28,9 +31,9 @@ function clearLocalUnderLock(): Promise<void> {
 
 /**
  * «Vaciar el registro» (`RegistroVaciar`/`RegistroVaciarConfirmar`, approved
- * 2026-09-09): a muted counterpart to `ExportPanel`'s accent download,
+ * 2026-09-09): a counterpart to the download menu, whose last item asks it,
  * hidden the same way once nothing is left to act on. Fetches its own count
- * on mount, the same call `HistoryList` and `ExportPanel` each make on
+ * on mount, the same call `HistoryList` and `DownloadMenu` each make on
  * theirs — no import here reaches into a page's own IndexedDB except this
  * component's own effect (RNL-08).
  *
@@ -52,6 +55,13 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
   const t = useTranslations("log.clear");
   const [count, setCount] = useState<CountState>({ kind: "loading" });
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
+
+  // Opening the confirmation moves focus to its title, so the keyboard lands where the question is.
+  const titleRef = useRef<HTMLDivElement>(null);
+  const confirming = stage.kind === "confirming";
+  useEffect(() => {
+    if (confirming) titleRef.current?.focus();
+  }, [confirming]);
 
   // The newest read wins: a reply older than the one in flight never paints.
   const requestIdRef = useRef(0);
@@ -95,17 +105,19 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
       read();
     }
 
-    read();
-    window.addEventListener(LOG_FLUSHED_EVENT, onChange);
-    window.addEventListener(LOG_CLEARED_EVENT, onChange);
-    window.addEventListener(LOG_DELETED_EVENT, onChange);
-    window.addEventListener(SYNC_LANDED_EVENT, onChange);
+    // Nothing is counted until the question is asked; from then on the figures follow the record.
+    let stopWatching: (() => void) | null = null;
+    const asked = () => {
+      setStage((current) => (current.kind === "idle" ? { kind: "confirming" } : current));
+      if (stopWatching !== null) return;
+      read();
+      stopWatching = onRecordChanged(onChange);
+    };
+    window.addEventListener(CLEAR_ASKED_EVENT, asked);
     return () => {
       cancelled = true;
-      window.removeEventListener(LOG_FLUSHED_EVENT, onChange);
-      window.removeEventListener(LOG_CLEARED_EVENT, onChange);
-      window.removeEventListener(LOG_DELETED_EVENT, onChange);
-      window.removeEventListener(SYNC_LANDED_EVENT, onChange);
+      window.removeEventListener(CLEAR_ASKED_EVENT, asked);
+      stopWatching?.();
     };
   }, []);
 
@@ -142,32 +154,22 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
 
   // Nothing to act on: `study.header` already says so, and an action that
   // would only confirm an empty store repeats it with a control that does
-  // nothing (the same gate `ExportPanel` runs on the same count).
+  // nothing (the same gate `DownloadMenu` runs on the same count).
   if (count.kind !== "ready" || count.lookups === 0) return null;
 
-  if (stage.kind === "idle") {
-    return (
-      <Link asChild underline="always" muted>
-        <button type="button" onClick={() => setStage({ kind: "confirming" })}>
-          <TapTarget align="center" px="1">
-            {t("trigger")}
-          </TapTarget>
-        </button>
-      </Link>
-    );
-  }
+  // The trigger is the download menu's own item; nothing draws until it is asked.
+  if (stage.kind === "idle") return null;
 
   const wiping = stage.kind === "wiping";
 
   return (
-    // `width="100%"`: forces this item onto its own line under the row it
-    // shares with `ExportPanel`'s download link (`registro/page.tsx`'s own
-    // `wrap="wrap"`), instead of squeezing a multi-line confirm beside it.
     <Flex direction="column" gap="4" width="100%">
       <Separator size="4" />
 
       <Flex direction="column" gap="2">
-        <Text variant="breakTitle">{t("confirmTitle")}</Text>
+        <Flex ref={titleRef} tabIndex={-1}>
+          <Text variant="breakTitle">{t("confirmTitle")}</Text>
+        </Flex>
         <Text variant="breakBody" muted>
           {t("confirmBody", { kind: count.entries, words: count.words, lookups: count.lookups })}
         </Text>

@@ -52,7 +52,7 @@ test("coccidiosis: the network block draws under the miss line, 200", async ({ p
   await stubUnlisted(UNLISTED_ANSWER);
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const answered = unlistedAnswered(page);
   await searchBox.fill("coccidiosis");
   await answered;
@@ -76,7 +76,7 @@ test("whereat: the correction offer draws and nothing is asked of /api/word/unli
     if (request.url().includes("/api/word/unlisted")) asked.push(request.url());
   });
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("whereat");
 
   await expect(page.getByText(messages.search.correctionTitle)).toBeVisible();
@@ -106,7 +106,7 @@ test("ru: the suggestion list holds, and no request reaches /api/word/unlisted",
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("ru");
 
   // The list drawing is the proof the keystroke committed; the clock is
@@ -129,7 +129,7 @@ test("coccidiosis: 204 draws today's screen plus one line, and nothing else", as
   // "no key, over a cap, a provider failure" all collapse to this).
   await openReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const answered = unlistedAnswered(page);
   await searchBox.fill("coccidiosis");
   await answered;

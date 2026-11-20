@@ -1,10 +1,26 @@
 # TimeLog — design guide
 
-Governs `apps/timelog` alone. «Escritorio (2026-11-19)» is the newest word on the desktop and «Menos (2026-11-19)» under 1100; older sections carry a note of what it replaced. No pattern crosses over from HomeFund or WordBook because it
+Governs `apps/timelog` alone. «Tablero (2026-11-19)», then «Escritorio (2026-11-19)», are the newest words on the desktop and «Menos (2026-11-19)» under 1100; older sections carry a note of what it replaced. No pattern crosses over from HomeFund or WordBook because it
 exists next door.
 
 Written 2026-10-28 for P5. The user has not seen it drawn yet: the first screen built is the first
 look, and these words change with what they say.
+
+## Tablero (2026-11-19)
+
+Decided by the user among three drawn variants: «A es el mejor» (RT-35). It wins over «Escritorio» and «Menos» where they
+disagree.
+
+- **Four figures** open «Hoy», a day and «Semana»: raised cards, radius 16, the label muted 14, the figure in the display face
+  (32 on the desktop, 26 on the phone), a muted line under it. «Clase principal» and «Claude Code» draw their figure in their
+  colour.
+- **The class bar** is 10 tall with no legend; «Por clase» is a panel in the middle column: a swatch, the name, its share
+  muted, its time.
+- **Three columns** from 1100: 1.5fr Apps, 1fr «Por clase», 1fr Sitios, Proyectos, Claude; 16 apart.
+- **Bars are 6 tall.** Durations are the sans, weight 600, tabular figures; mono is gone from the screens.
+- **Sidebar.** The ground colour with a track border; a section is a 40-tall row, muted; the current one raised with a 3px
+  cyan edge at its left.
+- **Top line.** ‹ title › at the left, «Actualizado hace…» at the right.
 
 ## Escritorio (2026-11-19)
 

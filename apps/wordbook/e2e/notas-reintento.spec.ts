@@ -52,7 +52,7 @@ function trackNotes(page: Page): string[] {
 }
 
 async function lookUp(page: Page, text: string): Promise<void> {
-  await page.getByRole("textbox", { name: messages.search.label }).fill(text);
+  await page.getByRole("combobox", { name: messages.search.label }).fill(text);
 }
 
 test("pending: the notes line shows while the notes request is held open", async ({

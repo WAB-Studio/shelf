@@ -61,7 +61,7 @@ const SUGGESTIONS_SETTLE_MS = 900;
 // merely contains it.
 function glossPattern(gloss: string): RegExp {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|, )${escaped}(,|$)`);
+  return new RegExp(`(^|, |· )${escaped}(,|$)`);
 }
 
 function glossLocator(page: Page, gloss: string): Locator {
@@ -157,7 +157,7 @@ test("an installed dictionary answers offline, fast, and within a thumb's reach"
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
   await context.setOffline(true);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
@@ -207,7 +207,7 @@ test("RL-18: the offer retires the moment an answer stands under it", async ({ p
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await freezeTimers(page);
   const suggestionsLabel = page.getByText(messages.word.suggestions);
   const heading = page.getByRole("heading", { name: "throughout" });
@@ -243,7 +243,7 @@ test("a mid-word prefix stays silent past the settle, and a real miss still says
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   await freezeTimers(page);
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const notFound = page.getByText(messages.search.notFound);
 
   // "ru" is not a headword on its own, but it prefixes real ones ("run",
@@ -279,7 +279,7 @@ test("RNL-03: an 85-character headword with no space to break on never scrolls t
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   // The dictionary's own longest headword, no space anywhere in it, paired
   // with the longest IPA it carries — the exact case that broke the page.
   const headword = "Taumatawhakatangihangakoauauotamateaturipukakapikimaungahoronukupokaiwhenuakitanatahu";
@@ -302,7 +302,7 @@ test("a paused prefix never leaves the page blank", async ({ page }) => {
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   // "ru" answers nothing on its own — the old withdrawal timer left this
   // exact pause with nothing at all on screen.
@@ -357,7 +357,7 @@ test("a headword with no definition at all draws no definition label and no dang
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   // "umbrella": one sense, no definition in the source, and no inflection
   // candidate the dictionary carries — nothing on the page but its own
   // headword and translations.
@@ -389,7 +389,7 @@ test("umbrella draws no dictionary definition, and the generated one arrives mar
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const answered = textResponse(page);
   await searchBox.fill("umbrella");
   await expect(page.getByRole("heading", { name: "umbrella", exact: true })).toBeVisible({ timeout: 5000 });
@@ -420,7 +420,7 @@ test("a text answer with neither a definition nor translations draws no generate
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const answered = textResponse(page);
   await searchBox.fill("umbrella");
   await expect(page.getByRole("heading", { name: "umbrella", exact: true })).toBeVisible({ timeout: 5000 });
@@ -446,7 +446,7 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("left");
   await expect(page.getByRole("heading", { name: "left", exact: true })).toBeVisible({ timeout: 5000 });
   // RL-40 offers `leave` within `left`'s entry — its own senses carry no
@@ -473,7 +473,7 @@ test("the English definition draws open with no interaction, and stays inside th
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("bitter");
   await expect(page.getByRole("heading", { name: "bitter", exact: true })).toBeVisible({ timeout: 5000 });
   await openRareSenses(page);
@@ -507,7 +507,7 @@ test("a word the dictionary carries never offers a one-letter lemma or an irregu
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   await searchBox.fill("bed");
   await expect(page.getByRole("heading", { name: "bed" })).toBeVisible({ timeout: 5000 });
@@ -542,7 +542,7 @@ test("a one-character query answers only `a` and `i`, never the other ten single
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   await freezeTimers(page);
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   const suggestionsLabel = page.getByText(messages.word.suggestions);
   const notFound = page.getByText(messages.search.notFound);
 
@@ -602,7 +602,7 @@ test("RL-40: a word's own entry answers first, and a plausible inflection is off
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   await searchBox.fill("left");
   const leftHeading = page.getByRole("heading", { name: "left", exact: true });
@@ -685,7 +685,7 @@ test("a headword replaced mid-flight never lands its text on the word that repla
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("umbrella");
   await expect(page.getByRole("heading", { name: "umbrella", exact: true })).toBeVisible({ timeout: 5000 });
 
@@ -723,7 +723,7 @@ test("RL-51: a headword with one pronunciation draws no block, and keeps its IPA
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("leave");
   await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible({ timeout: 5000 });
 
@@ -734,13 +734,13 @@ test("RL-51: a headword with one pronunciation draws no block, and keeps its IPA
 
   const order = await page.evaluate(() => {
     const labels = Array.from(document.querySelectorAll("main span"))
-      .filter((node) => node.closest("[data-entry-index]") === null)
-      .map((node) => node.textContent)
-      .filter((text) => text === "verbo" || text === "sustantivo");
+      .map((node) => node.textContent ?? "")
+      .filter((text) => /^\d+ · (verbo|sustantivo)$/.test(text));
     return labels;
   });
-  // The verb is the first of the header's index and draws no label of its own beneath it.
-  expect(order).toEqual(["sustantivo"]);
+  // Every sense is a numbered row: the verb leads, the noun follows.
+  expect(order[0]).toBe("1 · verbo");
+  expect(order.some((text) => text.endsWith("sustantivo"))).toBe(true);
 });
 
 // `lib/dictionary/pos-frequency.ts` scores "p" for proper noun and
@@ -761,18 +761,20 @@ test("a proper noun is labelled a proper noun, and the word «pronombre» is dra
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("facebook");
   await expect(page.getByRole("heading", { name: "facebook", exact: true })).toBeVisible({ timeout: 5000 });
 
-  await expect(page.getByText(messages.word.pos.pn, { exact: true }).first()).toBeVisible();
+  // The proper noun is the sense the entry folds as seldom met; its row names its category once opened.
+  await openRareSenses(page);
+  await expect(page.getByText(new RegExp(`^(\\d+ · )?${messages.word.pos.pn}$`)).first()).toBeVisible();
   await expect(page.getByText("pronombre", { exact: true })).toHaveCount(0);
 });
 
 test("RL-77: the box holds the focus on open, and still holds it once the dictionary is in", async ({ page }) => {
   await deleteTranslator(page);
   await page.goto("/");
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await expect(searchBox).toBeFocused();
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
   await expect(searchBox).toBeFocused();

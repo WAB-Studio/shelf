@@ -93,7 +93,7 @@ export type Upload =
 // `on conflict … do nothing` keeps a retry after a crash from duplicating (RL-24).
 // `received_at` is the statement's `now()`: every row of a batch ties on it.
 //
-// The same statement buries what the round names (RL-66): `buried` deletes the
+// The same statement buries what the round names (RL-99): `buried` deletes the
 // caller's rows of those identities, `marked` records each one with the row's
 // own `received_at` (0009's `sync_gate` counts a mark by it, so a delete
 // never refunds the day's cap), and `written` skips an identity already marked

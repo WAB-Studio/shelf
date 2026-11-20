@@ -1,4 +1,4 @@
-// RL-66 (device half) and RL-70: deleting a /registro row removes the group's
+// RL-99 (device half) and RL-70: deleting a /registro row removes the group's
 // searches from this device and queues their identities for the account;
 // marks other devices made remove the rows they name here. Written from the
 // contract: the group is the row's `headword ?? normalised` (summary.ts), the

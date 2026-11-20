@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import type { Sense } from "@/lib/dictionary/index-build";
 
-import { cutTranslation, formatSenseTranslations, previewTranslations, splitTranslations } from "./translation-line";
+import { cleanGlosses, cutTranslation, formatSenseTranslations, previewTranslations, splitTranslations } from "./translation-line";
 
 const LIMIT = 120;
 
@@ -135,4 +135,8 @@ test("formatSenseTranslations: a slang sense stays out of the line while a commo
   const verb: Sense = { pos: "v", ipa: null, translations: ["estorbar", "impedir"], definition: null };
   assert.equal(formatSenseTranslations([verb, slang]), "estorbar, impedir");
   assert.equal(formatSenseTranslations([slang]), "nalgas");
+});
+
+test("cleanGlosses: a trailing ellipsis goes, an empty gloss goes, a repeat goes", () => {
+  assert.deepEqual(cleanGlosses(["completamente", "por todo...", "todo…", "todo", "...", " "]), ["completamente", "por todo", "todo"]);
 });

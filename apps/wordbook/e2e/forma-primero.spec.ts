@@ -57,7 +57,7 @@ async function headingOrder(page: Page): Promise<string[]> {
 // bounded by the line's own start, end or `, `.
 function glossLocator(page: Page, gloss: string): Locator {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, )${escaped}(,|$)`));
+  return page.getByText(new RegExp(`(^|, |· )${escaped}(,|$)`));
 }
 
 // RL-47: the form the reader typed leads the answer, and the headword it
@@ -68,7 +68,7 @@ test("RL-47: swishing leads with its own form, swish sits under the 2px rule", a
   await deleteTranslator(page);
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("swishing");
 
   await expect(page.getByRole("heading", { name: "swishing", exact: true })).toBeVisible({ timeout: 5000 });
@@ -94,7 +94,7 @@ test("RL-47 leaves the exact branch alone but gives its offered lemma a voice co
   await deleteTranslator(page);
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("left");
 
   await expect(page.getByRole("heading", { name: "left", exact: true })).toBeVisible({ timeout: 5000 });
@@ -118,7 +118,7 @@ test("RL-47 keeps the bed clause: bed answers alone, reading still leads over re
   await deleteTranslator(page);
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
 
   await searchBox.fill("bed");
   await expect(page.getByRole("heading", { name: "bed", exact: true })).toBeVisible({ timeout: 5000 });
@@ -137,7 +137,7 @@ test("RL-47 keeps the bed clause: bed answers alone, reading still leads over re
   // one-gloss-per-line markup; this is the line that actually holds
   // `reading`'s own two glosses joined (docs/wordbook/DESIGN.md "The
   // translations are one line, separated by commas").
-  await expect(page.getByText("lectura, leída", { exact: true })).toBeVisible();
+  await expect(page.getByText("lectura · leída", { exact: true })).toBeVisible();
 
   const order = await headingOrder(page);
   expect(order.indexOf("reading")).toBeLessThan(order.indexOf("read"));
@@ -154,7 +154,7 @@ test("RL-26: snuffed's form-only answer gets a voice control, and it fires", asy
   await captureSpeech(page);
   await gotoReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("snuffed");
   await expect(page.getByRole("heading", { name: "snuffed", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByRole("heading", { name: "snuff", exact: true })).toBeVisible();
@@ -185,7 +185,7 @@ test('variant="compact" draws neither branch\'s network block', async ({ page, c
   await gotoReady(page);
   await context.setOffline(true);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("swishing tails");
 
   await expect(page.getByRole("heading", { name: "swishing", exact: true })).toBeVisible({ timeout: 5000 });
@@ -211,7 +211,7 @@ test("no real request to /api/word/* is left behind", async ({ page }) => {
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const searchBox = page.getByRole("combobox", { name: messages.search.label });
   await searchBox.fill("swishing");
   await expect(page.getByRole("heading", { name: "swish", exact: true })).toBeVisible({ timeout: 5000 });
   await searchBox.fill("");

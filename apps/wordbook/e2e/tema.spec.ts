@@ -3,9 +3,9 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
 
-// docs/wordbook/DESIGN.md's grounds: light `#faf8f2`, dark `#14130f`.
-const LIGHT_GROUND = "rgb(250, 248, 242)";
-const DARK_GROUND = "rgb(20, 19, 15)";
+// docs/wordbook/DESIGN.md's grounds: light `#f7f8f9`, dark `#121418`.
+const LIGHT_GROUND = "rgb(247, 248, 249)";
+const DARK_GROUND = "rgb(18, 20, 24)";
 
 async function ground(page: Page): Promise<string> {
   return page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--rl-ground").trim());
@@ -43,7 +43,7 @@ test("RNL-07: «Oscuro» chosen on a light system holds on this device across a 
 
   await page.reload();
   // Applied before the first paint: the ground is dark the moment the document is read.
-  expect(await ground(page)).toBe("#14130f");
+  expect(await ground(page)).toBe("#121418");
   await expect(page.getByRole("radio", { name: messages.theme.dark })).toBeChecked();
 
   await page.getByRole("radio", { name: messages.theme.light }).click();
