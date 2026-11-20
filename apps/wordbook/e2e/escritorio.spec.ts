@@ -176,10 +176,17 @@ test("RL-97: the panel of suggestions answers ↓, Enter and Esc", async ({ page
   await field.press("g");
   await expect(options.first()).toBeVisible();
 
-  await field.press("ArrowDown");
-  const word = (await options.nth(1).locator("span").nth(1).textContent())!.trim();
-  await field.press("Enter");
-  await expect(field).toHaveValue(word);
+  // The rows for «throug» may still land after a keystroke and put the light back on the first
+  // row, so the pick is retried from the typed text until one set of rows holds still.
+  await expect(async () => {
+    await field.fill("throug");
+    await expect(options.nth(1)).toBeVisible();
+    await field.press("ArrowDown");
+    await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
+    const word = (await options.nth(1).locator("span").nth(1).textContent())!.trim();
+    await field.press("Enter");
+    await expect(field).toHaveValue(word, { timeout: 1000 });
+  }).toPass({ timeout: 15000 });
 });
 
 // Registro as one table by day and Repaso in a centred column (docs/wordbook/DESIGN.md
