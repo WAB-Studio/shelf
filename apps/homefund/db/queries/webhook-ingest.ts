@@ -33,7 +33,7 @@ import { fingerprintMessage, merchantOf } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
 import { parseAmount } from "@/lib/money";
 import { interpretQuickEntry, readAccountTails } from "@/lib/transactions/interpret";
-import type { WebhookPayloadInput } from "@/lib/validation/webhook";
+import { readLocation, type WebhookPayloadInput } from "@/lib/validation/webhook";
 
 export type IngestDeliveryResult = {
   deliveryId: string;
@@ -110,6 +110,7 @@ export async function recordIngestDelivery({
   const extractedIdentifier = extractNumber(payload.text);
   const verdictReason = email && !email.movement ? email.reason : null;
   const receipt = email?.movement === true && email.receipt;
+  const location = readLocation(payload);
 
   // A receipt names its business in a field when no «en <comercio>» does (RF-208).
   const merchant = fingerprint.merchant ?? (receipt ? merchantOf(emailMerchant(payload.text) ?? "") : null);
@@ -411,7 +412,10 @@ export async function recordIngestDelivery({
             reject_reason,
             receipt,
             from_email,
-            duplicate_of_id
+            duplicate_of_id,
+            latitude,
+            longitude,
+            location_accuracy_m
           ) values (
             ${credentialId},
             ${externalRef},
@@ -432,7 +436,10 @@ export async function recordIngestDelivery({
             ${rejectReason},
             ${receipt},
             ${email !== undefined},
-            ${duplicateOfId}
+            ${duplicateOfId},
+            ${location?.latitude ?? null},
+            ${location?.longitude ?? null},
+            ${location?.accuracyM ?? null}
           )
           returning id, status
         `),
@@ -502,4 +509,14 @@ export async function recordIngestDelivery({
       };
     }
   });
+}
+
+// Fills the place of a delivery the ingest already stored (RF-320); a place already there stays.
+export async function recordDeliveryPlace(ownerUserId: string, deliveryId: string, place: string): Promise<void> {
+  await withImpersonatedDb(ownerUserId, (tx) =>
+    tx
+      .update(ingestDeliveries)
+      .set({ place })
+      .where(and(eq(ingestDeliveries.id, deliveryId), isNull(ingestDeliveries.place))),
+  );
 }

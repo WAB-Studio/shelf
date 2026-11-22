@@ -11,6 +11,20 @@ const amountSchema = pesoAmountSchema({
   tooLarge: "webhooks.errors.amountTooLarge",
 });
 
+// Shortcuts sends numbers as text, and a phone set to Spanish writes the decimal comma. A value that is no
+// number in range reads as absent, so a bad location never refuses the delivery (RF-320).
+function locationNumber(min: number, max: number) {
+  return z
+    .preprocess((value) => {
+      if (typeof value === "number") return value;
+      if (typeof value !== "string") return undefined;
+      const text = value.trim();
+      return /^-?\d+(?:[.,]\d+)?$/.test(text) ? Number(text.replace(",", ".")) : undefined;
+    }, z.number().min(min).max(max))
+    .optional()
+    .catch(undefined);
+}
+
 // `external_ref` is optional: a caller that sends none gets the idempotency key
 // the per-scope unique index needs derived from the message text, and one that
 // sends its own overrides that. Every other field is a caller override the
@@ -33,7 +47,22 @@ export const webhookPayloadSchema = z.object({
   direction: z
     .enum(["expense", "income"], { error: "webhooks.errors.directionInvalid" })
     .optional(),
+  latitude: locationNumber(-90, 90),
+  longitude: locationNumber(-180, 180),
+  accuracy: locationNumber(0, 1_000_000),
 });
+
+/** The place the phone reported, or null: a coordinate needs its pair, and the accuracy rides only with one. */
+export function readLocation(
+  payload: Pick<WebhookPayloadInput, "latitude" | "longitude" | "accuracy">,
+): { latitude: number; longitude: number; accuracyM: number | null } | null {
+  if (payload.latitude === undefined || payload.longitude === undefined) return null;
+  return {
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+    accuracyM: payload.accuracy === undefined ? null : Math.round(payload.accuracy),
+  };
+}
 
 // The keys and value types mirror `WebhookIngestPayload`, so the parsed body
 // feeds `ingestWebhookMovement` unchanged; the route (C7) exercises that pass.

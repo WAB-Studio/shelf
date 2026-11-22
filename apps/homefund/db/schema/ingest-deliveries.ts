@@ -5,7 +5,9 @@ import {
   boolean,
   check,
   date,
+  doublePrecision,
   index,
+  integer,
   pgPolicy,
   text,
   timestamp,
@@ -80,6 +82,13 @@ export const ingestDeliveries = finances.table(
     fromEmail: boolean().notNull().default(false),
     // The delivery this one repeats (RF-208); set only with the reason `duplicate`, cleared if that one goes.
     duplicateOfId: uuid().references((): AnyPgColumn => ingestDeliveries.id, { onDelete: "set null" }),
+    // Where the phone was when the alert arrived (RF-320): WGS84 degrees, the radius the phone vouched for in
+    // metres, and the line a reverse geocoder made of them. All null when the shortcut sent none or the geocoder
+    // did not answer; none of it is money.
+    latitude: doublePrecision(),
+    longitude: doublePrecision(),
+    locationAccuracyM: integer(),
+    place: text(),
     // Stamped when the delivery leaves the queue, in either direction.
     resolvedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -143,6 +152,14 @@ export const ingestDeliveries = finances.table(
     check(
       "ingest_deliveries_duplicate_of_only_when_duplicate",
       sql`${table.duplicateOfId} is null or ${table.rejectReason} = 'duplicate'`,
+    ),
+    check(
+      "ingest_deliveries_location_valid",
+      sql`(${table.latitude} is null) = (${table.longitude} is null)
+        and (${table.latitude} is null or ${table.latitude} between -90 and 90)
+        and (${table.longitude} is null or ${table.longitude} between -180 and 180)
+        and (${table.locationAccuracyM} is null or ${table.locationAccuracyM} >= 0)
+        and length(${table.place}) <= 200`,
     ),
     // The idempotency key (RF-90): a re-delivery of the same reference is refused, not duplicated.
     uniqueIndex("ingest_deliveries_owner_external_ref_unique").on(

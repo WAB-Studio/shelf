@@ -1,12 +1,15 @@
 import "server-only";
 
-import { recordIngestDelivery } from "@/db/queries/webhook-ingest";
+import { after } from "next/server";
+
+import { recordDeliveryPlace, recordIngestDelivery } from "@/db/queries/webhook-ingest";
 import {
   resolveWebhookCredential,
   type ResolvedWebhookCredential,
 } from "@/db/queries/webhook-credentials";
 import type { EmailVerdict } from "@/lib/ingest/classify";
-import type { WebhookPayloadInput } from "@/lib/validation/webhook";
+import { reverseGeocode } from "@/lib/ingest/geocode";
+import { readLocation, type WebhookPayloadInput } from "@/lib/validation/webhook";
 
 // As `/mcp` reads it: any case, any spacing, a header typed by hand in an iOS Shortcut included.
 const BEARER = /^Bearer\s+(\S+)\s*$/i;
@@ -45,6 +48,20 @@ export async function deliver(
       payload,
       email,
     });
+
+    // The place is looked up once the answer is sent, so the phone never waits on the geocoder (RF-320).
+    const location = readLocation(payload);
+    if (location && !result.duplicate && result.status === "pending") {
+      after(async () => {
+        try {
+          const place = await reverseGeocode(location.latitude, location.longitude);
+          if (place !== null) await recordDeliveryPlace(cred.ownerUserId, result.deliveryId, place);
+        } catch {
+          // The delivery stands without a place; never the coordinates in the log.
+          console.error("webhook place failed", { credentialOwner: cred.ownerUserId });
+        }
+      });
+    }
 
     return Response.json(
       {

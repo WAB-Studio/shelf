@@ -217,6 +217,15 @@ export function arrivedVia(
   return say(delivery.credentialBadge, delivery.credentialName);
 }
 
+// Where the phone was when it arrived (RF-320), as a quiet line; null when the shortcut sent no location.
+export function nearLine(
+  delivery: Pick<PendingDeliveryRow, "place" | "latitude">,
+  say: (key: "nearPlace" | "locationSaved", values?: { place: string }) => string,
+): string | null {
+  if (delivery.place !== null) return say("nearPlace", { place: delivery.place });
+  return delivery.latitude === null ? null : say("locationSaved");
+}
+
 export function DeliveryCard({
   delivery: proposal,
   options,
@@ -335,6 +344,7 @@ export function DeliveryCard({
         });
 
   const via = arrivedVia(delivery, (badge, name) => t("arrivedVia", { kind: badge, name }));
+  const near = nearLine(delivery, (key, values) => t(key, values));
 
   function runReject(nextSilenceShape: boolean) {
     silenceShape.current = nextSilenceShape;
@@ -591,6 +601,11 @@ export function DeliveryCard({
           )}
         </Flex>
 
+        {near !== null && (
+          <Text size="2" color="gray">
+            {near}
+          </Text>
+        )}
         {delivery.recipientName && (
           <Text size="2" color="gray">
             {t("recipientIs", { name: delivery.recipientName })}

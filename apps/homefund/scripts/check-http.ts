@@ -10,6 +10,7 @@
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 
 import { openRun } from "@repo/harness-registry";
@@ -995,6 +996,7 @@ void (async () => {
     await emailDuplicateSuite();
     await alertDescriptionSuite();
     await mcpClassesSuite();
+    await deliveryLocationSuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -1997,4 +1999,84 @@ async function mcpClassesSuite(): Promise<void> {
       destructive("import_statement") && destructive("move_account_to_fund"),
     `it answered ${listed.status} with ${exposed.length} tools`,
   );
+}
+
+// RF-320: a delivery that carries coordinates stores them and, once answered, gets its place from the reverse
+// geocoder; a garbage location lands the delivery all the same. The geocoder is a stub on `GEOCODER_URL`, set
+// for the dev server and this process alike in CI; without it the place is skipped, never asked of Nominatim.
+async function deliveryLocationSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("deliveryLocationSuite ran before the session was read");
+  const geocoderUrl = process.env.GEOCODER_URL;
+  const asked: string[] = [];
+  const stub = geocoderUrl
+    ? createServer((request, response) => {
+        asked.push(request.url ?? "");
+        response.setHeader("content-type", "application/json");
+        response.end(
+          JSON.stringify({
+            name: "Tienda Harness",
+            category: "shop",
+            address: { road: "Calle 80", suburb: "Engativá", city: "Bogotá" },
+          }),
+        );
+      })
+    : null;
+  if (stub && geocoderUrl) await new Promise<void>((done) => stub.listen(Number(new URL(geocoderUrl).port), "127.0.0.1", done));
+
+  try {
+    const token = await edgeCredential(userId);
+    const tag = randomUUID().slice(0, 8).toUpperCase();
+    const message = (label: string) =>
+      `Bancolombia: Compraste COP12.000,00 en LUGAR ${label} ${tag} con tu T.Cred *4872, el 25/08/2026 a las 20:07.`;
+    const send = async (label: string, extra: Record<string, unknown>) => {
+      const reply = await postRaw({ authorization: `Bearer ${token}` }, JSON.stringify({ text: message(label), ...extra }));
+      if (typeof reply.body.deliveryId === "string") landedDeliveries.push(reply.body.deliveryId);
+      return reply;
+    };
+    const read = async (id: unknown) => {
+      const [row] = await fixtureSql<
+        { latitude: number | null; longitude: number | null; accuracy: number | null; place: string | null }[]
+      >`select latitude, longitude, location_accuracy_m as accuracy, place from ingest_deliveries where id = ${String(id)}`;
+      return row;
+    };
+
+    const located = await send("UNO", { latitude: "4,7110", longitude: -74.0721, accuracy: "15" });
+    const stored = await read(located.body.deliveryId);
+    assert(
+      next("a delivery with coordinates stores them, a numeric string and a decimal comma included"),
+      located.status === 200 && stored?.latitude === 4.711 && stored.longitude === -74.0721 && stored.accuracy === 15,
+      `it answered ${located.status}, the row read ${JSON.stringify(stored)}`,
+    );
+
+    if (stub) {
+      let place: string | null = null;
+      for (let attempt = 0; attempt < 50 && place === null; attempt += 1) {
+        place = (await read(located.body.deliveryId))?.place ?? null;
+        if (place === null) await new Promise((done) => setTimeout(done, 200));
+      }
+      assert(
+        next("the stubbed geocoder fills the place after the answer"),
+        place === "Tienda Harness, Calle 80, Engativá, Bogotá" && asked.some((url) => url.includes("lat=4.711")),
+        `the place read ${JSON.stringify(place)}, the geocoder was asked ${asked.length} times`,
+      );
+    } else {
+      skip(next("the stubbed geocoder fills the place after the answer"), "GEOCODER_URL is not set; the geocoder is never called for real");
+    }
+
+    const garbage = await send("DOS", { latitude: "norte", longitude: 999, accuracy: -3 });
+    const none = await read(garbage.body.deliveryId);
+    assert(
+      next("garbage coordinates still land the delivery, with no location"),
+      garbage.status === 200 &&
+        garbage.body.duplicate === false &&
+        none?.latitude === null &&
+        none.longitude === null &&
+        none.accuracy === null &&
+        none.place === null,
+      `it answered ${garbage.status}, the row read ${JSON.stringify(none)}`,
+    );
+  } finally {
+    if (stub) await new Promise<void>((done) => stub.close(() => done()));
+  }
 }
