@@ -242,6 +242,8 @@ jobs:
     env:
       HARNESS_LANE: 10
       HARNESS_BASE_URL: http://localhost:3000
+      # The reverse geocoder the dev server asks is the stub `check:http` serves on this port (RF-320); no run reaches Nominatim.
+      GEOCODER_URL: http://127.0.0.1:45987
       # A test salt, not a secret: RF-143's caps key on it and pass unkeyed without it.
       CLIENT_KEY_SALT: ci-test-salt-not-secret
     steps:

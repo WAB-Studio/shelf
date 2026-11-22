@@ -33,7 +33,7 @@ import { fingerprintMessage, merchantOf } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
 import { parseAmount } from "@/lib/money";
 import { interpretQuickEntry, readAccountTails } from "@/lib/transactions/interpret";
-import type { WebhookPayloadInput } from "@/lib/validation/webhook";
+import { readLocation, type WebhookPayloadInput } from "@/lib/validation/webhook";
 
 export type IngestDeliveryResult = {
   deliveryId: string;
@@ -41,6 +41,9 @@ export type IngestDeliveryResult = {
   duplicate: boolean;
   // Set when the delivery landed rejected because the payment it reports was already in the inbox (RF-208).
   reason?: "duplicate";
+  // The pending delivery whose place is still to be looked up (RF-320), with the point to look up: the new
+  // one, or the original a located repeat gave its location to; absent when there is nothing to look up.
+  located?: { id: string; latitude: number; longitude: number };
 };
 
 export type RecordIngestDeliveryArgs = {
@@ -78,7 +81,7 @@ type Merchant = ReturnType<typeof merchantOf>;
 // A delivery that repeats an alert still waiting gives it the business the alert did not name, so the
 // person reads «CENS» where the bank said «a la cuenta *1234» (RF-208).
 async function fillOriginal(
-  tx: Parameters<Parameters<typeof withImpersonatedDb>[1]>[0],
+  tx: Tx,
   original: DuplicateCandidate,
   merchant: Merchant,
 ): Promise<void> {
@@ -96,6 +99,24 @@ async function fillOriginal(
     );
 }
 
+type Tx = Parameters<Parameters<typeof withImpersonatedDb>[1]>[0];
+
+// Gives a stored delivery that has no location the one a repeat of it carried (RF-320); one that already has
+// its own keeps it. Answers what the geocoder is to look up, or nothing when the delivery was not changed.
+async function lendLocation(
+  tx: Tx,
+  deliveryId: string,
+  location: NonNullable<ReturnType<typeof readLocation>>,
+): Promise<IngestDeliveryResult["located"]> {
+  const [lent] = await tx
+    .update(ingestDeliveries)
+    .set({ latitude: location.latitude, longitude: location.longitude, locationAccuracyM: location.accuracyM })
+    .where(and(eq(ingestDeliveries.id, deliveryId), isNull(ingestDeliveries.latitude)))
+    .returning({ id: ingestDeliveries.id });
+
+  return lent ? { id: lent.id, latitude: location.latitude, longitude: location.longitude } : undefined;
+}
+
 export async function recordIngestDelivery({
   ownerUserId,
   credentialId,
@@ -110,6 +131,7 @@ export async function recordIngestDelivery({
   const extractedIdentifier = extractNumber(payload.text);
   const verdictReason = email && !email.movement ? email.reason : null;
   const receipt = email?.movement === true && email.receipt;
+  const location = readLocation(payload);
 
   // A receipt names its business in a field when no «en <comercio>» does (RF-208).
   const merchant = fingerprint.merchant ?? (receipt ? merchantOf(emailMerchant(payload.text) ?? "") : null);
@@ -411,7 +433,10 @@ export async function recordIngestDelivery({
             reject_reason,
             receipt,
             from_email,
-            duplicate_of_id
+            duplicate_of_id,
+            latitude,
+            longitude,
+            location_accuracy_m
           ) values (
             ${credentialId},
             ${externalRef},
@@ -432,7 +457,10 @@ export async function recordIngestDelivery({
             ${rejectReason},
             ${receipt},
             ${email !== undefined},
-            ${duplicateOfId}
+            ${duplicateOfId},
+            ${location?.latitude ?? null},
+            ${location?.longitude ?? null},
+            ${location?.accuracyM ?? null}
           )
           returning id, status
         `),
@@ -447,14 +475,18 @@ export async function recordIngestDelivery({
           set status = 'rejected', resolved_at = now()
           where id = ${row.id} and status = 'pending'
         `);
+        let located: IngestDeliveryResult["located"];
         if (original.kind === "repeats" && rejectReason === "duplicate") {
           await fillOriginal(tx, original.of, merchant);
+          // The repeat knows where the phone was and the original, still waiting, does not (RF-320).
+          if (location) located = await lendLocation(tx, original.of.id, location);
         }
         return {
           deliveryId: row.id,
           status: "rejected",
           duplicate: false,
           ...(rejectReason === "duplicate" ? { reason: "duplicate" as const } : {}),
+          ...(located ? { located } : {}),
         };
       }
 
@@ -478,6 +510,7 @@ export async function recordIngestDelivery({
         deliveryId: row.id,
         status: row.status,
         duplicate: false,
+        ...(location && row.status === "pending" ? { located: { id: row.id, ...location } } : {}),
       };
     } catch (error) {
       if (pgErrorCode(error) !== "23505") throw error;
@@ -495,11 +528,26 @@ export async function recordIngestDelivery({
 
       if (!existing) throw error;
 
+      // The same alert sent again with a location, as the shortcut's second post does (RF-320): still no
+      // second delivery, but the one stored learns where the phone was.
+      const located = location ? await lendLocation(tx, existing.id, location) : undefined;
+
       return {
         deliveryId: existing.id,
         status: existing.status as IngestDeliveryResult["status"],
         duplicate: true,
+        ...(located ? { located } : {}),
       };
     }
   });
+}
+
+// Fills the place of a delivery the ingest already stored (RF-320); a place already there stays.
+export async function recordDeliveryPlace(ownerUserId: string, deliveryId: string, place: string): Promise<void> {
+  await withImpersonatedDb(ownerUserId, (tx) =>
+    tx
+      .update(ingestDeliveries)
+      .set({ place })
+      .where(and(eq(ingestDeliveries.id, deliveryId), isNull(ingestDeliveries.place))),
+  );
 }

@@ -36,6 +36,8 @@ export type InboxTableRow = {
   // Where it came from, in words, or null once the key is gone (RF-203).
   via: string | null;
   rawText: string;
+  // «Cerca de <sitio>» (RF-320), or null when the shortcut sent no location.
+  near: string | null;
   category: { name: string; color: string | null } | null;
   account: string | null;
   // A card purchase whose ending matches no card: the person says which card it was.
@@ -145,6 +147,11 @@ export function InboxTable({
           {row.via !== null && (
             <Text size="1" color="gray" truncate>
               {row.via}
+            </Text>
+          )}
+          {row.near !== null && (
+            <Text size="1" color="gray" truncate>
+              {row.near}
             </Text>
           )}
         </Flex>

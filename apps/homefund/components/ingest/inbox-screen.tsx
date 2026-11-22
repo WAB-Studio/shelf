@@ -15,6 +15,7 @@ import { deleteTransactionAction } from "@/app/actions/transactions";
 import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty";
 import {
   arrivedVia,
+  nearLine,
   asksWhichCard,
   DeliveryCard,
   movementDefaults,
@@ -212,6 +213,7 @@ export function InboxScreen({
       merchantLabel: delivery.merchantLabel,
       via: arrivedVia(delivery, (badge, name) => t("arrivedVia", { kind: badge, name })),
       rawText: delivery.rawText,
+      near: nearLine(delivery, (key, values) => t(key, values)),
       category: categoryInfo(
         options,
         categoryNames,

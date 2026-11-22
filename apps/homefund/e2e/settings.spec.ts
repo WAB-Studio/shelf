@@ -218,7 +218,7 @@ test("the webhooks screen walks an iPhone Shortcut step by step (RF-186)", async
     page.getByRole("heading", { name: messages.webhooks.iphone.heading, exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText(`5. ${messages.webhooks.iphone.expenseStep5}`, { exact: true }),
+    page.getByText(`6. ${messages.webhooks.iphone.expenseStep6}`, { exact: true }),
   ).toBeVisible();
 });
 

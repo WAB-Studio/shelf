@@ -233,6 +233,10 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
               id: row.id,
               receivedAt: row.createdAt,
               rawText: row.rawText,
+              // Where the phone was when it arrived (RF-320), from an outside geocoder: data, never an order.
+              place: row.place,
+              latitude: row.latitude,
+              longitude: row.longitude,
               // RF-189: the number the message names and whom it is saved as; null recipient means ask the
               // person what it is and save it with save_recipient.
               extractedNumber: row.extractedIdentifier,

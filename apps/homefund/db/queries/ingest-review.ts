@@ -48,6 +48,10 @@ export type PendingDeliveryRow = {
   // The proposal is dated before its account opened, so the database would refuse it (MO001).
   beforeOpening: boolean;
   createdAt: Date;
+  // Where the phone was when it arrived (RF-320); null when the shortcut sent no location.
+  latitude: number | null;
+  longitude: number | null;
+  place: string | null;
   // Set once the delivery left the queue: when, and the movement an acceptance wrote.
   resolvedAt: Date | null;
   transactionId: string | null;
@@ -193,6 +197,9 @@ export async function listDeliveries({
         proposedDescription: ingestDeliveries.proposedDescription,
         rejectReason: ingestDeliveries.rejectReason,
         createdAt: ingestDeliveries.createdAt,
+        latitude: ingestDeliveries.latitude,
+        longitude: ingestDeliveries.longitude,
+        place: ingestDeliveries.place,
         resolvedAt: ingestDeliveries.resolvedAt,
         transactionId: ingestDeliveries.transactionId,
         recorded: recordedMovementSql,
