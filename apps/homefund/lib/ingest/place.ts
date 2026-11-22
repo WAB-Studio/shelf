@@ -52,5 +52,7 @@ export function formatPlace(reverse: NominatimReverse): string | null {
     })
     .join(", ");
 
-  return line === "" ? null : line.slice(0, MAX_PLACE_LENGTH);
+  // Cut by code points, never through a surrogate pair, and never leave a dangling separator.
+  const cut = Array.from(line).slice(0, MAX_PLACE_LENGTH).join("").replace(/[,\s]+$/, "");
+  return cut === "" ? null : cut;
 }

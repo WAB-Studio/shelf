@@ -2,8 +2,8 @@ import { formatPlace, type NominatimReverse } from "@/lib/ingest/place";
 
 // OpenStreetMap's public reverse geocoder: no key, and its usage policy asks for an identifying
 // User-Agent naming the app, nothing about the person. The base URL is overridable so a suite can point
-// it at a stub; no test reaches the real service.
-const DEFAULT_BASE_URL = "https://nominatim.openstreetmap.org";
+// it at a stub; outside production the public service is never called, so no test or dev server reaches it.
+const PUBLIC_BASE_URL = "https://nominatim.openstreetmap.org/";
 const USER_AGENT = "HomeFund/1.0";
 const TIMEOUT_MS = 2000;
 
@@ -14,9 +14,14 @@ const TIMEOUT_MS = 2000;
 export async function reverseGeocode(
   latitude: number,
   longitude: number,
-  { baseUrl = process.env.GEOCODER_URL ?? DEFAULT_BASE_URL, fetchImpl = fetch }: { baseUrl?: string; fetchImpl?: typeof fetch } = {},
+  {
+    baseUrl = process.env.GEOCODER_URL ?? (process.env.NODE_ENV === "production" ? PUBLIC_BASE_URL : undefined),
+    fetchImpl = fetch,
+  }: { baseUrl?: string; fetchImpl?: typeof fetch } = {},
 ): Promise<string | null> {
-  const url = new URL("/reverse", baseUrl);
+  if (!baseUrl) return null;
+  // Relative to the base with a trailing slash, so a path prefix on the base stays.
+  const url = new URL("reverse", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   url.search = new URLSearchParams({
     format: "jsonv2",
     lat: String(latitude),

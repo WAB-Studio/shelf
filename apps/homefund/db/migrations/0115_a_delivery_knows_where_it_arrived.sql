@@ -7,7 +7,7 @@ ALTER TABLE "finances"."ingest_deliveries" ADD CONSTRAINT "ingest_deliveries_loc
         and ("finances"."ingest_deliveries"."longitude" is null or "finances"."ingest_deliveries"."longitude" between -180 and 180)
         and ("finances"."ingest_deliveries"."location_accuracy_m" is null or "finances"."ingest_deliveries"."location_accuracy_m" >= 0)
         and length("finances"."ingest_deliveries"."place") <= 200);--> statement-breakpoint
--- RF-320, hand-written: drizzle-kit diffs no grant. The ingest writes the location with the row and fills the
--- place afterwards; the table grants its columns one by one.
+-- RF-320, hand-written: drizzle-kit diffs no grant. The ingest writes the location with the row, fills the
+-- place afterwards and lends a repeat's location to the pending original it repeats; the table grants its columns one by one.
 GRANT SELECT (latitude, longitude, location_accuracy_m, place), INSERT (latitude, longitude, location_accuracy_m, place) ON TABLE "finances"."ingest_deliveries" TO authenticated;--> statement-breakpoint
-GRANT UPDATE (place) ON TABLE "finances"."ingest_deliveries" TO authenticated;
+GRANT UPDATE (latitude, longitude, location_accuracy_m, place) ON TABLE "finances"."ingest_deliveries" TO authenticated;

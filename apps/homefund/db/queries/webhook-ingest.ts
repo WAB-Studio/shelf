@@ -41,6 +41,9 @@ export type IngestDeliveryResult = {
   duplicate: boolean;
   // Set when the delivery landed rejected because the payment it reports was already in the inbox (RF-208).
   reason?: "duplicate";
+  // The pending delivery whose place is still to be looked up (RF-320), with the point to look up: the new
+  // one, or the original a located repeat gave its location to; absent when there is nothing to look up.
+  located?: { id: string; latitude: number; longitude: number };
 };
 
 export type RecordIngestDeliveryArgs = {
@@ -454,14 +457,35 @@ export async function recordIngestDelivery({
           set status = 'rejected', resolved_at = now()
           where id = ${row.id} and status = 'pending'
         `);
+        let located: IngestDeliveryResult["located"];
         if (original.kind === "repeats" && rejectReason === "duplicate") {
           await fillOriginal(tx, original.of, merchant);
+          // The repeat knows where the phone was and the original, still waiting, does not (RF-320).
+          if (location) {
+            const [lent] = await tx
+              .update(ingestDeliveries)
+              .set({
+                latitude: location.latitude,
+                longitude: location.longitude,
+                locationAccuracyM: location.accuracyM,
+              })
+              .where(
+                and(
+                  eq(ingestDeliveries.id, original.of.id),
+                  eq(ingestDeliveries.status, "pending"),
+                  isNull(ingestDeliveries.latitude),
+                ),
+              )
+              .returning({ id: ingestDeliveries.id });
+            if (lent) located = { id: lent.id, latitude: location.latitude, longitude: location.longitude };
+          }
         }
         return {
           deliveryId: row.id,
           status: "rejected",
           duplicate: false,
           ...(rejectReason === "duplicate" ? { reason: "duplicate" as const } : {}),
+          ...(located ? { located } : {}),
         };
       }
 
@@ -485,6 +509,7 @@ export async function recordIngestDelivery({
         deliveryId: row.id,
         status: row.status,
         duplicate: false,
+        ...(location && row.status === "pending" ? { located: { id: row.id, ...location } } : {}),
       };
     } catch (error) {
       if (pgErrorCode(error) !== "23505") throw error;

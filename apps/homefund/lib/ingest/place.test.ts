@@ -33,6 +33,39 @@ test("outside text loses its line breaks and is cut short", () => {
   assert.equal(formatPlace({ name: "x".repeat(500), category: "shop" })?.length, 120);
 });
 
+test("the cut keeps whole characters and leaves no dangling separator", () => {
+  const emoji = formatPlace({ name: "😀".repeat(200), category: "shop" });
+  assert.equal(Array.from(emoji ?? "").length, 120);
+  assert.ok(!/[\ud800-\udbff]$/.test(emoji ?? ""));
+  assert.equal(formatPlace({ name: `${"x".repeat(118)}, y`, category: "shop" }), "x".repeat(118));
+});
+
+test("outside production, with no GEOCODER_URL, the public service is never asked", async () => {
+  let called = false;
+  const spy = (async () => {
+    called = true;
+    return Response.json({});
+  }) as unknown as typeof fetch;
+  const saved = process.env.GEOCODER_URL;
+  delete process.env.GEOCODER_URL;
+  try {
+    assert.equal(await reverseGeocode(1, 1, { fetchImpl: spy }), null);
+    assert.equal(called, false);
+  } finally {
+    if (saved !== undefined) process.env.GEOCODER_URL = saved;
+  }
+});
+
+test("a path prefix on the geocoder's base stays", async () => {
+  let seen = "";
+  const stub = (async (input: URL) => {
+    seen = String(input);
+    return Response.json({});
+  }) as unknown as typeof fetch;
+  await reverseGeocode(1, 2, { baseUrl: "http://geocoder.test/osm", fetchImpl: stub });
+  assert.ok(seen.startsWith("http://geocoder.test/osm/reverse?"), seen);
+});
+
 test("the geocoder asks for the point with the app's own agent and reads the answer", async () => {
   let seen: { url: string; agent: string | null } | null = null;
   const stub = (async (input: URL, init?: RequestInit) => {

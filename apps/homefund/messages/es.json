@@ -1965,7 +1965,7 @@
       "smsStep1": "En Atajos › Automatización toca «+», elige «Mensaje», pon en «Remitente» el número del que te escribe el banco (o en «El mensaje contiene» una palabra que siempre trae) y marca «Ejecutar inmediatamente».",
       "smsStep2": "Agrega «Obtener ubicación actual» antes de la URL. La primera vez iOS te pregunta una vez si Atajos puede usar tu ubicación: acepta.",
       "smsStep3": "Agrega «Obtener contenido de URL» con la misma URL, método y encabezado del gasto escrito.",
-      "smsStep4": "En «Cuerpo de la solicitud» elige JSON y agrega tres campos de texto: «text» con la variable «Entrada del atajo», propiedad «Contenido», «latitude» con la variable «Ubicación actual», propiedad «Latitud», y «longitude» con la misma variable, propiedad «Longitud». Si no hay ubicación, el SMS entra igual, sin lugar. HomeFund lee si es gasto o ingreso, y el mismo SMS dos veces entra una sola.",
+      "smsStep4": "En «Cuerpo de la solicitud» elige JSON y agrega tres campos de texto: «text» con la variable «Entrada del atajo», propiedad «Contenido», «latitude» con la variable «Ubicación actual», propiedad «Latitud», y «longitude» con la misma variable, propiedad «Longitud». Pon la ubicación de Atajos en «Siempre» (Ajustes › Privacidad › Localización › Atajos). Si el iPhone no logra leer la ubicación, el SMS no llega: si prefieres que siempre llegue, deja este paso fuera. HomeFund lee si es gasto o ingreso, y el mismo SMS dos veces entra una sola.",
       "result": "Lo que llega espera en la Bandeja hasta que lo aceptes; nada se anota solo."
     },
     "widget": {
