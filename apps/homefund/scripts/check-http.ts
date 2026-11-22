@@ -2087,15 +2087,20 @@ async function deliveryLocationSuite(): Promise<void> {
 
     // The same alert by email (no location) and then by the phone (located): the phone's delivery lands as a
     // duplicate and the original still waiting takes its location and its place.
+    const pesos = `${3 + Math.floor(Math.random() * 6)}.${String(100 + Math.floor(Math.random() * 900))}.000`;
     const mailed = await fetch(`${HARNESS_BASE_URL}/api/webhooks/email`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-      body: JSON.stringify({ from: "yo@example.com", subject: "Alertas y Notificaciones", text: message("TRES", "13.000") }),
+      body: JSON.stringify({
+        from: "yo@example.com",
+        subject: "Alertas y Notificaciones",
+        text: `Bancolombia: Compraste COP${pesos},00 en COMERCIO ${tag} con tu T.Cred *4872.`,
+      }),
     });
     const mail = (await mailed.json()) as Record<string, unknown>;
     if (typeof mail.deliveryId === "string") landedDeliveries.push(mail.deliveryId);
     // Worded differently, so it has its own key and is judged a repeat of the email rather than the same delivery.
-    const repeat = await send(`Bancolombia: Compraste $13.000 en LUGAR TRES ${tag} con tu T.Cred *4872, el 25/08/2026 a las 20:07.`, {
+    const repeat = await send(`Bancolombia: Compraste $${pesos} en COMERCIO ${tag} con tu T.Cred *4872.`, {
       latitude: 4.6097,
       longitude: -74.0817,
     });
