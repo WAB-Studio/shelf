@@ -18864,7 +18864,9 @@ async function recipientsSuite(): Promise<void> {
   keep("webhook_credentials", credentialId);
   const { tool } = mcpClient(POST, token);
   const save = (fields: Record<string, unknown>) => tool("save_recipient", fields);
-  const sent = (to: string) => `Bancolombia: Transferiste $60.000 desde tu cuenta *3397 a la cuenta ${to} el 11/11/2026 05:48. ${randomUUID().slice(0, 6)}`;
+  // Five days back, after the accounts open (ten days back), so the notice's own day never ages past them.
+  const sentOn = shiftDate(today, -5).split("-").reverse().join("/");
+  const sent = (to: string) => `Bancolombia: Transferiste $60.000 desde tu cuenta *3397 a la cuenta ${to} el ${sentOn} 05:48. ${randomUUID().slice(0, 6)}`;
   type Delivered = { direction: string | null; account: string | null; to: string | null; category: string | null; source: string | null; description: string | null; number: string | null; recipient: string | null; status: string };
   const deliver = async (text: string): Promise<Delivered> => {
     const result = await recordIngestDelivery({
