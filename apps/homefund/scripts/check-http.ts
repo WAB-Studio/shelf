@@ -10,6 +10,7 @@
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 
 import { openRun } from "@repo/harness-registry";
@@ -995,6 +996,7 @@ void (async () => {
     await emailDuplicateSuite();
     await alertDescriptionSuite();
     await mcpClassesSuite();
+    await deliveryLocationSuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -1997,4 +1999,144 @@ async function mcpClassesSuite(): Promise<void> {
       destructive("import_statement") && destructive("move_account_to_fund"),
     `it answered ${listed.status} with ${exposed.length} tools`,
   );
+}
+
+// RF-320: a delivery that carries coordinates stores them and, once answered, gets its place from the reverse
+// geocoder; a garbage location lands the delivery all the same; a located repeat lends its location to the
+// pending original. The geocoder is a stub on `GEOCODER_URL`, set for the dev server and this process alike in CI.
+// Without it nothing located is sent: outside production the server never asks the public service, and this
+// suite never leans on that.
+async function deliveryLocationSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("deliveryLocationSuite ran before the session was read");
+  const geocoderUrl = process.env.GEOCODER_URL;
+  if (!geocoderUrl) {
+    skip(next("deliveries with a location store it and get a place"), "GEOCODER_URL is not set; nothing located is sent");
+    return;
+  }
+  const port = new URL(geocoderUrl).port;
+  if (port === "") throw new Error(`GEOCODER_URL needs an explicit port to serve the stub on, got ${geocoderUrl}`);
+
+  const asked: string[] = [];
+  const stub = createServer((request, response) => {
+    asked.push(request.url ?? "");
+    response.setHeader("content-type", "application/json");
+    response.end(
+      JSON.stringify({
+        name: "Tienda Harness",
+        category: "shop",
+        address: { road: "Calle 80", suburb: "Engativá", city: "Bogotá" },
+      }),
+    );
+  });
+  await new Promise<void>((done) => stub.listen(Number(port), "127.0.0.1", done));
+
+  try {
+    const token = await edgeCredential(userId);
+    const tag = randomUUID().slice(0, 8).toUpperCase();
+    const message = (label: string, amount = "12.000") =>
+      `Bancolombia: Compraste COP${amount},00 en LUGAR ${label} ${tag} con tu T.Cred *4872, el 25/08/2026 a las 20:07.`;
+    const send = async (text: string, extra: Record<string, unknown>) => {
+      const reply = await postRaw({ authorization: `Bearer ${token}` }, JSON.stringify({ text, ...extra }));
+      if (typeof reply.body.deliveryId === "string") landedDeliveries.push(reply.body.deliveryId);
+      return reply;
+    };
+    const read = async (id: unknown) => {
+      const [row] = await fixtureSql<
+        { latitude: number | null; longitude: number | null; accuracy: number | null; place: string | null }[]
+      >`select latitude, longitude, location_accuracy_m as accuracy, place from ingest_deliveries where id = ${String(id)}`;
+      return row;
+    };
+    const placeOf = async (id: unknown) => {
+      let place: string | null = null;
+      for (let attempt = 0; attempt < 50 && place === null; attempt += 1) {
+        place = (await read(id))?.place ?? null;
+        if (place === null) await new Promise((done) => setTimeout(done, 200));
+      }
+      return place;
+    };
+    const PLACE = "Tienda Harness, Calle 80, Engativá, Bogotá";
+
+    const located = await send(message("UNO"), { latitude: "4,7110", longitude: -74.0721, accuracy: "15" });
+    const stored = await read(located.body.deliveryId);
+    assert(
+      next("a delivery with coordinates stores them, a numeric string and a decimal comma included"),
+      located.status === 200 && stored?.latitude === 4.711 && stored.longitude === -74.0721 && stored.accuracy === 15,
+      `it answered ${located.status}, the row read ${JSON.stringify(stored)}`,
+    );
+
+    const place = await placeOf(located.body.deliveryId);
+    assert(
+      next("the stubbed geocoder fills the place after the answer"),
+      place === PLACE && asked.some((url) => url.includes("lat=4.711")),
+      `the place read ${JSON.stringify(place)}, the geocoder was asked ${asked.length} times`,
+    );
+
+    const garbage = await send(message("DOS"), { latitude: "norte", longitude: 999, accuracy: -3 });
+    const none = await read(garbage.body.deliveryId);
+    assert(
+      next("garbage coordinates still land the delivery, with no location"),
+      garbage.status === 200 &&
+        garbage.body.duplicate === false &&
+        none?.latitude === null &&
+        none.longitude === null &&
+        none.accuracy === null &&
+        none.place === null,
+      `it answered ${garbage.status}, the row read ${JSON.stringify(none)}`,
+    );
+
+    // The same alert by email (no location) and then by the phone (located): the phone's delivery lands as a
+    // duplicate and the original still waiting takes its location and its place.
+    const pesos = `${3 + Math.floor(Math.random() * 6)}.${String(100 + Math.floor(Math.random() * 900))}.000`;
+    const mailed = await fetch(`${HARNESS_BASE_URL}/api/webhooks/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        from: "yo@example.com",
+        subject: "Alertas y Notificaciones",
+        text: `Bancolombia: Compraste COP${pesos},00 en COMERCIO ${tag} con tu T.Cred *4872.`,
+      }),
+    });
+    const mail = (await mailed.json()) as Record<string, unknown>;
+    if (typeof mail.deliveryId === "string") landedDeliveries.push(mail.deliveryId);
+    // Worded differently, so it has its own key and is judged a repeat of the email rather than the same delivery.
+    const repeat = await send(`Bancolombia: Compraste $${pesos} en COMERCIO ${tag} con tu T.Cred *4872.`, {
+      latitude: 4.6097,
+      longitude: -74.0817,
+    });
+    const original = await read(mail.deliveryId);
+    const originalPlace = await placeOf(mail.deliveryId);
+    assert(
+      next("a located repeat of a pending alert gives the original its location and its place"),
+      repeat.body.reason === "duplicate" &&
+        repeat.body.deliveryId !== mail.deliveryId &&
+        original?.latitude === 4.6097 &&
+        original.longitude === -74.0817 &&
+        originalPlace === PLACE,
+      `the repeat answered ${JSON.stringify(repeat.body)}, the original read ${JSON.stringify(original)} and ${JSON.stringify(originalPlace)}`,
+    );
+
+    // The SMS shortcut's own flow: the text alone first, so the SMS always arrives, then the same text with
+    // the location. The second is the same delivery again, never a second row, and it fills the first.
+    const sms = message("CUATRO", "14.000");
+    const first = await send(sms, {});
+    const second = await send(sms, { latitude: "4,6097", longitude: "-74,0817" });
+    const held = await read(first.body.deliveryId);
+    const heldPlace = await placeOf(first.body.deliveryId);
+    const [{ rows }] = await fixtureSql<{ rows: string }[]>`
+      select count(*)::text as rows from ingest_deliveries where owner_user_id = ${userId} and raw_text = ${sms}`;
+    assert(
+      next("the same text sent again with a location adds it to the stored delivery and lands no second one"),
+      first.body.duplicate === false &&
+        second.body.duplicate === true &&
+        second.body.deliveryId === first.body.deliveryId &&
+        rows === "1" &&
+        held?.latitude === 4.6097 &&
+        held.longitude === -74.0817 &&
+        heldPlace === PLACE,
+      `first ${JSON.stringify(first.body)}, second ${JSON.stringify(second.body)}, ${rows} rows, the row read ${JSON.stringify(held)} and ${JSON.stringify(heldPlace)}`,
+    );
+  } finally {
+    await new Promise<void>((done) => stub.close(() => done()));
+  }
 }

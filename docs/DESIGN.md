@@ -537,6 +537,14 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Gasto escrito» (six numbered steps) and «SMS del banco» (three), pointing at the URL of «Cómo enviar un movimiento»,
   and a gray line saying a delivery waits in the Bandeja. Steps name the Shortcuts actions as iOS names them.
 
+## Decisions of 2026-11-22: where a delivery arrived, by the user
+
+- The «Atajo de iPhone» card now counts seven steps in «Gasto escrito» and five in «SMS del banco». In the typed expense
+  the second step is «Obtener ubicación actual», before «Obtener contenido de URL», and the body carries «latitude» and
+  «longitude». In the SMS the text is posted first, then comes the location step and a second post with the coordinates.
+- A Bandeja card and its desktop row show a quiet gray line «Cerca de <sitio>» under the merchant, or «Ubicación guardada»
+  when only the coordinates arrived; nothing when the delivery carries none.
+
 ## Decisions of 2026-11-11: HomeFund's widget on the iPhone, by the user
 
 - «Ajustes · Correos del banco» has a «Widget del iPhone» card under «Atajo de iPhone»: one line on what it shows, then
