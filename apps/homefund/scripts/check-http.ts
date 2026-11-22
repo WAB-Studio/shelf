@@ -2094,12 +2094,17 @@ async function deliveryLocationSuite(): Promise<void> {
     });
     const mail = (await mailed.json()) as Record<string, unknown>;
     if (typeof mail.deliveryId === "string") landedDeliveries.push(mail.deliveryId);
-    const repeat = await send(message("TRES", "13.000"), { latitude: 4.6097, longitude: -74.0817 });
+    // Worded differently, so it has its own key and is judged a repeat of the email rather than the same delivery.
+    const repeat = await send(`Bancolombia: Compraste $13.000 en LUGAR TRES ${tag} con tu T.Cred *4872.`, {
+      latitude: 4.6097,
+      longitude: -74.0817,
+    });
     const original = await read(mail.deliveryId);
     const originalPlace = await placeOf(mail.deliveryId);
     assert(
       next("a located repeat of a pending alert gives the original its location and its place"),
       repeat.body.reason === "duplicate" &&
+        repeat.body.deliveryId !== mail.deliveryId &&
         original?.latitude === 4.6097 &&
         original.longitude === -74.0817 &&
         originalPlace === PLACE,
