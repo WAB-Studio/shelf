@@ -44,3 +44,13 @@ test("a bad accuracy drops only the accuracy", () => {
   assert.deepEqual(locationOf({ latitude: 1, longitude: 2, accuracy: -5 }), { latitude: 1, longitude: 2, accuracyM: null });
   assert.deepEqual(locationOf({ latitude: 1, longitude: 2, accuracy: "mucha" }), { latitude: 1, longitude: 2, accuracyM: null });
 });
+
+test("the Shortcut's latitude and longitude read the same as comma text, dot text or numbers, with spaces and no accuracy", () => {
+  const bogota = { latitude: 4.6097, longitude: -74.0817, accuracyM: null };
+  assert.deepEqual(locationOf({ latitude: "4,6097", longitude: "-74,0817" }), bogota);
+  assert.deepEqual(locationOf({ latitude: "4.6097", longitude: "-74.0817" }), bogota);
+  assert.deepEqual(locationOf({ latitude: 4.6097, longitude: -74.0817 }), bogota);
+  assert.deepEqual(locationOf({ latitude: "  4,6097 ", longitude: " -74.0817  " }), bogota);
+  assert.deepEqual(locationOf({ latitude: "4,6097", longitude: -74.0817 }), bogota);
+  assert.deepEqual(locationOf({ latitude: "4", longitude: "-74" }), { latitude: 4, longitude: -74, accuracyM: null });
+});
