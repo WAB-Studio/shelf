@@ -2,7 +2,7 @@ import { useTranslations } from "next-intl";
 
 import { Flex, Heading, Text } from "@/components/ui";
 
-const STEP_COUNTS = { expense: 7, sms: 4 } as const;
+const STEP_COUNTS = { expense: 7, sms: 5 } as const;
 
 // RF-186: the steps name the Shortcuts actions as iOS labels them in the person's language.
 export function IphoneShortcut() {

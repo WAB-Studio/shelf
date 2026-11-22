@@ -539,8 +539,9 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 
 ## Decisions of 2026-11-22: where a delivery arrived, by the user
 
-- The «Atajo de iPhone» card now counts seven steps in «Gasto escrito» and four in «SMS del banco»: the second of each
-  is «Obtener ubicación actual», before «Obtener contenido de URL», and the body carries «latitude» and «longitude».
+- The «Atajo de iPhone» card now counts seven steps in «Gasto escrito» and five in «SMS del banco». In the typed expense
+  the second step is «Obtener ubicación actual», before «Obtener contenido de URL», and the body carries «latitude» and
+  «longitude». In the SMS the text is posted first, then comes the location step and a second post with the coordinates.
 - A Bandeja card and its desktop row show a quiet gray line «Cerca de <sitio>» under the merchant, or «Ubicación guardada»
   when only the coordinates arrived; nothing when the delivery carries none.
 

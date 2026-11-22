@@ -1963,9 +1963,10 @@
       "expenseStep7": "Name it «HomeFund expense». Tap it or ask Siri and type, for example, «Lunch 25000».",
       "smsHeading": "Bank text message",
       "smsStep1": "In Shortcuts › Automation tap «+», pick «Message», set «Sender» to the number your bank texts from (or «Message Contains» to a word it always carries) and select «Run Immediately».",
-      "smsStep2": "Add «Get Current Location» before the URL. The first time iOS asks once whether Shortcuts may use your location: accept.",
-      "smsStep3": "Add «Get Contents of URL» with the same URL, method and header as the typed expense.",
-      "smsStep4": "Under «Request Body» pick JSON and add three text fields: «text» with the «Shortcut Input» variable, property «Content», «latitude» with the «Current Location» variable, property «Latitude», and «longitude» with the same variable, property «Longitude». Set Shortcuts' location to «Always» (Settings › Privacy › Location Services › Shortcuts). If the iPhone cannot read the location, the message does not arrive: if you would rather it always arrives, leave this step out. HomeFund reads whether it is an expense or an income, and the same message sent twice arrives once.",
+      "smsStep2": "Add «Get Contents of URL» with the same URL, method and header as the typed expense.",
+      "smsStep3": "Under «Request Body» pick JSON and add a single text field: «text» with the «Shortcut Input» variable, property «Content». HomeFund reads whether it is an expense or an income, and the same message sent twice arrives once. This way the message always arrives, with or without a location.",
+      "smsStep4": "Add «Get Current Location» and set the accuracy to «Nearest Ten Meters». The first time iOS asks once whether Shortcuts may use your location: pick «While Using App» and leave «Precise Location» on. If the iPhone cannot read it, only the place is lost: the message already arrived.",
+      "smsStep5": "Add another «Get Contents of URL» with the same URL, method and header, and under «Request Body» pick JSON with three text fields: «text» as before, «latitude» with the «Current Location» variable, property «Latitude», and «longitude» with the same variable, property «Longitude». HomeFund does not repeat the message: it adds the place to the one that already arrived.",
       "result": "What arrives waits in the Inbox until you accept it; nothing is recorded on its own."
     },
     "widget": {

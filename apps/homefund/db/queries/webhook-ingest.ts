@@ -81,7 +81,7 @@ type Merchant = ReturnType<typeof merchantOf>;
 // A delivery that repeats an alert still waiting gives it the business the alert did not name, so the
 // person reads «CENS» where the bank said «a la cuenta *1234» (RF-208).
 async function fillOriginal(
-  tx: Parameters<Parameters<typeof withImpersonatedDb>[1]>[0],
+  tx: Tx,
   original: DuplicateCandidate,
   merchant: Merchant,
 ): Promise<void> {
@@ -97,6 +97,24 @@ async function fillOriginal(
         isNull(ingestDeliveries.merchantKey),
       ),
     );
+}
+
+type Tx = Parameters<Parameters<typeof withImpersonatedDb>[1]>[0];
+
+// Gives a stored delivery that has no location the one a repeat of it carried (RF-320); one that already has
+// its own keeps it. Answers what the geocoder is to look up, or nothing when the delivery was not changed.
+async function lendLocation(
+  tx: Tx,
+  deliveryId: string,
+  location: NonNullable<ReturnType<typeof readLocation>>,
+): Promise<IngestDeliveryResult["located"]> {
+  const [lent] = await tx
+    .update(ingestDeliveries)
+    .set({ latitude: location.latitude, longitude: location.longitude, locationAccuracyM: location.accuracyM })
+    .where(and(eq(ingestDeliveries.id, deliveryId), isNull(ingestDeliveries.latitude)))
+    .returning({ id: ingestDeliveries.id });
+
+  return lent ? { id: lent.id, latitude: location.latitude, longitude: location.longitude } : undefined;
 }
 
 export async function recordIngestDelivery({
@@ -461,24 +479,7 @@ export async function recordIngestDelivery({
         if (original.kind === "repeats" && rejectReason === "duplicate") {
           await fillOriginal(tx, original.of, merchant);
           // The repeat knows where the phone was and the original, still waiting, does not (RF-320).
-          if (location) {
-            const [lent] = await tx
-              .update(ingestDeliveries)
-              .set({
-                latitude: location.latitude,
-                longitude: location.longitude,
-                locationAccuracyM: location.accuracyM,
-              })
-              .where(
-                and(
-                  eq(ingestDeliveries.id, original.of.id),
-                  eq(ingestDeliveries.status, "pending"),
-                  isNull(ingestDeliveries.latitude),
-                ),
-              )
-              .returning({ id: ingestDeliveries.id });
-            if (lent) located = { id: lent.id, latitude: location.latitude, longitude: location.longitude };
-          }
+          if (location) located = await lendLocation(tx, original.of.id, location);
         }
         return {
           deliveryId: row.id,
@@ -527,10 +528,15 @@ export async function recordIngestDelivery({
 
       if (!existing) throw error;
 
+      // The same alert sent again with a location, as the shortcut's second post does (RF-320): still no
+      // second delivery, but the one stored learns where the phone was.
+      const located = location ? await lendLocation(tx, existing.id, location) : undefined;
+
       return {
         deliveryId: existing.id,
         status: existing.status as IngestDeliveryResult["status"],
         duplicate: true,
+        ...(located ? { located } : {}),
       };
     }
   });

@@ -2105,6 +2105,27 @@ async function deliveryLocationSuite(): Promise<void> {
         originalPlace === PLACE,
       `the repeat answered ${JSON.stringify(repeat.body)}, the original read ${JSON.stringify(original)} and ${JSON.stringify(originalPlace)}`,
     );
+
+    // The SMS shortcut's own flow: the text alone first, so the SMS always arrives, then the same text with
+    // the location. The second is the same delivery again, never a second row, and it fills the first.
+    const sms = message("CUATRO", "14.000");
+    const first = await send(sms, {});
+    const second = await send(sms, { latitude: "4,6097", longitude: "-74,0817" });
+    const held = await read(first.body.deliveryId);
+    const heldPlace = await placeOf(first.body.deliveryId);
+    const [{ rows }] = await fixtureSql<{ rows: string }[]>`
+      select count(*)::text as rows from ingest_deliveries where owner_user_id = ${userId} and raw_text = ${sms}`;
+    assert(
+      next("the same text sent again with a location adds it to the stored delivery and lands no second one"),
+      first.body.duplicate === false &&
+        second.body.duplicate === true &&
+        second.body.deliveryId === first.body.deliveryId &&
+        rows === "1" &&
+        held?.latitude === 4.6097 &&
+        held.longitude === -74.0817 &&
+        heldPlace === PLACE,
+      `first ${JSON.stringify(first.body)}, second ${JSON.stringify(second.body)}, ${rows} rows, the row read ${JSON.stringify(held)} and ${JSON.stringify(heldPlace)}`,
+    );
   } finally {
     await new Promise<void>((done) => stub.close(() => done()));
   }

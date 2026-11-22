@@ -1963,9 +1963,10 @@
       "expenseStep7": "Llámalo «Gasto HomeFund». Tócalo o díselo a Siri y escribe, por ejemplo, «Almuerzo 25000».",
       "smsHeading": "SMS del banco",
       "smsStep1": "En Atajos › Automatización toca «+», elige «Mensaje», pon en «Remitente» el número del que te escribe el banco (o en «El mensaje contiene» una palabra que siempre trae) y marca «Ejecutar inmediatamente».",
-      "smsStep2": "Agrega «Obtener ubicación actual» antes de la URL. La primera vez iOS te pregunta una vez si Atajos puede usar tu ubicación: acepta.",
-      "smsStep3": "Agrega «Obtener contenido de URL» con la misma URL, método y encabezado del gasto escrito.",
-      "smsStep4": "En «Cuerpo de la solicitud» elige JSON y agrega tres campos de texto: «text» con la variable «Entrada del atajo», propiedad «Contenido», «latitude» con la variable «Ubicación actual», propiedad «Latitud», y «longitude» con la misma variable, propiedad «Longitud». Pon la ubicación de Atajos en «Siempre» (Ajustes › Privacidad › Localización › Atajos). Si el iPhone no logra leer la ubicación, el SMS no llega: si prefieres que siempre llegue, deja este paso fuera. HomeFund lee si es gasto o ingreso, y el mismo SMS dos veces entra una sola.",
+      "smsStep2": "Agrega «Obtener contenido de URL» con la misma URL, método y encabezado del gasto escrito.",
+      "smsStep3": "En «Cuerpo de la solicitud» elige JSON y agrega un solo campo de texto: «text» con la variable «Entrada del atajo», propiedad «Contenido». HomeFund lee si es gasto o ingreso, y el mismo SMS dos veces entra una sola. Así el SMS siempre llega, con o sin ubicación.",
+      "smsStep4": "Agrega «Obtener ubicación actual» y en la precisión elige «10 metros más cercanos». La primera vez iOS pregunta una vez si Atajos puede usar tu ubicación: elige «Al usar la app» y deja «Ubicación precisa» activada. Si el iPhone no logra leerla, solo se pierde el lugar: el SMS ya llegó.",
+      "smsStep5": "Agrega otra «Obtener contenido de URL» con la misma URL, método y encabezado, y en «Cuerpo de la solicitud» elige JSON con tres campos de texto: «text» igual que antes, «latitude» con la variable «Ubicación actual», propiedad «Latitud», y «longitude» con la misma variable, propiedad «Longitud». HomeFund no repite el SMS: le agrega el lugar al que ya llegó.",
       "result": "Lo que llega espera en la Bandeja hasta que lo aceptes; nada se anota solo."
     },
     "widget": {
