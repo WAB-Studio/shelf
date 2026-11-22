@@ -2095,7 +2095,7 @@ async function deliveryLocationSuite(): Promise<void> {
     const mail = (await mailed.json()) as Record<string, unknown>;
     if (typeof mail.deliveryId === "string") landedDeliveries.push(mail.deliveryId);
     // Worded differently, so it has its own key and is judged a repeat of the email rather than the same delivery.
-    const repeat = await send(`Bancolombia: Compraste $13.000 en LUGAR TRES ${tag} con tu T.Cred *4872.`, {
+    const repeat = await send(`Bancolombia: Compraste $13.000 en LUGAR TRES ${tag} con tu T.Cred *4872, el 25/08/2026 a las 20:07.`, {
       latitude: 4.6097,
       longitude: -74.0817,
     });
